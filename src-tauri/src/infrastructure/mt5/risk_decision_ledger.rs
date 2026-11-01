@@ -733,7 +733,7 @@ pub(crate) fn status(
     let verified = verify_chain(&connection, broker_server, account_login)?;
     #[cfg(not(test))]
     {
-        return verify_external_checkpoint(&verified);
+        verify_external_checkpoint(&verified)
     }
     #[cfg(test)]
     {
