@@ -76,7 +76,7 @@ test('FVG lifecycle emits chronological partial/full-fill and inversion-candidat
   assert.match(moduleSource, /event_type: "partial_fill"/);
   assert.match(moduleSource, /event_type: "full_fill"/);
   assert.match(moduleSource, /event_type: "inversion_candidate"/);
-  assert.match(moduleSource, /\(gap\.formed_at_index \+ 1\)\.\.candles\.len\(\)/);
+  assert.match(moduleSource, /\.skip\(gap\.formed_at_index \+ 1\)/);
   assert.match(moduleSource, /FVG input contains an invalid zone or formation reference/);
   assert.match(moduleSource, /fvg_lifecycle_emits_partial_then_full_fill_once_and_never_on_formation_bar/);
   assert.match(moduleSource, /fvg_close_beyond_far_boundary_is_only_an_inversion_candidate/);
