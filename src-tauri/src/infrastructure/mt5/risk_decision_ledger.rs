@@ -1028,6 +1028,7 @@ mod tests {
             version: CHECKPOINT_VERSION,
             event_count: final_receipt.sequence,
             head_sha256: final_receipt.event_sha256,
+            pending: None,
         };
         let result = compare_checkpoint(&truncated, &checkpoint);
         assert!(!result.valid);
