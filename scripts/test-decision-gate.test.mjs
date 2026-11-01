@@ -34,7 +34,7 @@ const assessmentFor = (item, status, extra = {}) => ({
 const goodAssessment = (item) => item.availability === 'Catalog only'
   ? assessmentFor(item, 'unsupported', { reason: 'Reviewed detector implementation is not available yet.' })
   : assessmentFor(item, 'evaluated', {
-      evidenceRefs: [`fixture:${item.id}`],
+      evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(item)}`],
       result: { value: 'fixture-only' },
       lookAheadSafe: true,
       implementationVersion: REVIEWED_IMPLEMENTATION_VERSION_BY_CATALOG_ID[item.id] ?? 'unregistered-test-version',
@@ -77,7 +77,7 @@ test('missing one assessment blocks handoff', () => {
 test('caller cannot self-promote catalog-only concepts by changing payload availability', () => {
   const input = validInput();
   input.catalog = catalog.map((item) => ({ ...item, availability: 'Calculated now' }));
-  input.assessments = catalog.map((item) => assessmentFor(item, 'evaluated', { evidenceRefs: ['agent-assertion'], result: {}, lookAheadSafe: true, implementationVersion: 'agent-assertion', dataSnapshotId: 'agent-assertion' }));
+  input.assessments = catalog.map((item) => assessmentFor(item, 'evaluated', { evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(item)}`], result: {}, lookAheadSafe: true, implementationVersion: 'agent-assertion', dataSnapshotId: 'agent-assertion' }));
   const result = evaluateStrictDecisionGate(input);
   assert.equal(result.allowed, false);
   assert.ok(result.reasons.some((reason) => reason.includes('code-owned Strict Master List')));
@@ -87,7 +87,7 @@ test('caller cannot self-promote catalog-only concepts by changing payload avail
 test('catalog-only concept cannot be marked evaluated even when assessment has evidence', () => {
   const input = validInput();
   const index = catalog.findIndex((item) => item.availability === 'Catalog only');
-  input.assessments[index] = assessmentFor(catalog[index], 'evaluated', { evidenceRefs: ['fixture'], result: {}, lookAheadSafe: true, implementationVersion: 'test', dataSnapshotId: 'fixture' });
+  input.assessments[index] = assessmentFor(catalog[index], 'evaluated', { evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${index}`], result: {}, lookAheadSafe: true, implementationVersion: 'test', dataSnapshotId: 'fixture' });
   const result = evaluateStrictDecisionGate(input);
   assert.equal(result.allowed, false);
   assert.ok(result.reasons.some((reason) => reason.includes('must remain unsupported')));
@@ -202,12 +202,30 @@ test('assessment timestamp must match the exact snapshot cutoff and evidence ref
 
   const second = validInput();
   const evaluated = second.assessments.find((entry) => entry.status === 'evaluated');
-  evaluated.evidenceRefs = ['same-ref', 'same-ref'];
+  evaluated.evidenceRefs = [`snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(catalog.find((entry) => entry.id === evaluated.catalogId))}`, `snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(catalog.find((entry) => entry.id === evaluated.catalogId))}`];
   const duplicateEvidence = evaluateStrictDecisionGate(second);
   assert.equal(duplicateEvidence.allowed, false);
   assert.ok(duplicateEvidence.reasons.some((reason) => reason.includes('evidence references')));
 });
 
+
+test('evidence references must bind to the exact snapshot and use canonical safe locators', () => {
+  const input = validInput();
+  const index = input.assessments.findIndex((entry) => entry.status === 'evaluated');
+  const original = input.assessments[index];
+  const reference = original.evidenceRefs[0];
+  input.assessments[index] = { ...original, evidenceRefs: [reference.replace('a'.repeat(64), 'b'.repeat(64))] };
+  let result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('bound to the market-data snapshot')));
+
+  input.assessments[index] = { ...original, evidenceRefs: ['agent-assertion'] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:../private`] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+});
 
 test('JavaScript parity gate never authorizes downstream handoff; Rust is authoritative', () => {
   const result = evaluateStrictDecisionGate(validInput());
