@@ -443,7 +443,6 @@ pub fn append(
 ) -> Result<Mt5RiskDecisionReceipt, String> {
     let (request_json, result_json) = validate_record(record)?;
     let mut connection = open_connection(path)?;
-    initialize(&connection)?;
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| format!("Risk-decision append transaction could not begin: {error}"))?;
@@ -541,7 +540,6 @@ pub fn status(
         return Err("Risk-decision ledger status requires a valid broker server and account identity.".into());
     }
     let connection = open_connection(path)?;
-    initialize(&connection)?;
     verify_chain(&connection, broker_server, account_login)
 }
 
@@ -553,6 +551,14 @@ mod tests {
 
     fn temp_path() -> std::path::PathBuf {
         std::env::temp_dir().join(format!("atos-mt5-risk-ledger-{}.sqlite3", Uuid::new_v4()))
+    }
+
+    fn initialized_path() -> std::path::PathBuf {
+        let path = initialized_path();
+        let connection = open_connection(&path).unwrap();
+        initialize(&connection).unwrap();
+        drop(connection);
+        path
     }
 
     fn sample_record(account: &str, decision: &str, sequence: u64) -> Mt5RiskDecisionRecord {
@@ -591,7 +597,7 @@ mod tests {
 
     #[test]
     fn append_records_both_approved_and_blocked_decisions_in_one_account_chain() {
-        let path = temp_path();
+        let path = initialized_path();
         let connection = open_connection(&path).unwrap();
         initialize(&connection).unwrap();
         drop(connection);
@@ -614,7 +620,7 @@ mod tests {
 
     #[test]
     fn decision_chains_are_isolated_by_authenticated_account_identity() {
-        let path = temp_path();
+        let path = initialized_path();
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         append(&path, &sample_record("67890", "BLOCKED", 1)).unwrap();
         let first = status(&path, "Broker-Live", "12345").unwrap();
@@ -627,7 +633,7 @@ mod tests {
 
     #[test]
     fn identity_mismatch_is_rejected_before_the_ledger_changes() {
-        let path = temp_path();
+        let path = initialized_path();
         let mut record = sample_record("12345", "BLOCKED", 1);
         record.request["accountLogin"] = Value::String("99999".into());
         assert!(append(&path, &record).is_err());
@@ -638,7 +644,7 @@ mod tests {
 
     #[test]
     fn update_and_delete_are_rejected_by_append_only_triggers() {
-        let path = temp_path();
+        let path = initialized_path();
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         let connection = Connection::open(&path).unwrap();
         assert!(connection.execute(
@@ -652,7 +658,7 @@ mod tests {
 
     #[test]
     fn chain_verification_detects_payload_tampering_even_after_trigger_bypass() {
-        let path = temp_path();
+        let path = initialized_path();
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         let connection = Connection::open(&path).unwrap();
         connection.execute_batch(
