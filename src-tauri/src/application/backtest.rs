@@ -689,8 +689,8 @@ fn run_once(
         return Err("Benchmark quantity is outside the supported numeric range.".into());
     }
 
-    for i in evaluation_start_index..candles.len() {
-        let price = candles[i].close;
+    for (i, candle) in candles.iter().enumerate().skip(evaluation_start_index) {
+        let price = candle.close;
         if i > request.slow_period {
             // Detect a true crossover using two completed candles, then execute at this bar's
             // open. The execution bar's close is never used to decide the order.
@@ -815,7 +815,6 @@ fn run_once(
         cash = net;
         quantity = 0.0;
         entry_cash_spent = 0.0;
-        in_position = false;
         if let Some(last_point) = points.last_mut() {
             last_point.equity = net;
         }
