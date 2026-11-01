@@ -1,4 +1,4 @@
-/** @typedef {'dashboard' | 'market data' | 'screener' | 'audit history' | 'strict analysis' | 'paper order' | 'backtest' | 'agent lifecycle' | 'risk controls' | 'account maintenance' | 'risk settings' | 'research workspace' | 'MT5 bridge' | 'MT5 bridge setup' | 'MT5 market-data series' | 'MT5 instrument specification' | 'MT5 session calendar' | 'MT5 risk sizing' | 'market-data provider registry' | 'unified market-data query' | 'meme coin hunter'} NativeCapability */
+/** @typedef {'dashboard' | 'market data' | 'screener' | 'audit history' | 'strict analysis' | 'paper order' | 'backtest' | 'agent lifecycle' | 'risk controls' | 'account maintenance' | 'risk settings' | 'research workspace' | 'MT5 bridge' | 'MT5 bridge setup' | 'MT5 market-data series' | 'MT5 instrument specification' | 'MT5 session calendar' | 'MT5 risk sizing' | 'market-data provider registry' | 'unified market-data query' | 'meme coin hunter' | 'technical indicators' | 'native indicator signals' | 'market structure analysis'} NativeCapability */
 
 export class NativeRuntimeRequiredError extends Error {
   /** @param {NativeCapability} capability */

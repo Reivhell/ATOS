@@ -128,7 +128,10 @@ fn verify_external_checkpoint(
     let checkpoint = read_checkpoint(&status.broker_server, &status.account_login)?;
     match checkpoint {
         Some(mut checkpoint) if checkpoint.pending.is_some() => {
-            let pending = checkpoint.pending.as_ref().expect("pending checkpoint checked");
+            let pending = checkpoint
+                .pending
+                .as_ref()
+                .expect("pending checkpoint checked");
             if pending.event_count != checkpoint.event_count.saturating_add(1)
                 || !is_sha256(&pending.head_sha256)
             {
@@ -727,9 +730,14 @@ pub(crate) fn append(
             ));
         }
         let mut checkpoint = read_checkpoint(&record.broker_server, &record.account_login)?
-            .ok_or_else(|| "Risk-decision checkpoint disappeared before append; refusing to write.".to_string())?;
+            .ok_or_else(|| {
+                "Risk-decision checkpoint disappeared before append; refusing to write.".to_string()
+            })?;
         if checkpoint.pending.is_some() {
-            return Err("Risk-decision checkpoint has an unresolved append; manual recovery is required.".into());
+            return Err(
+                "Risk-decision checkpoint has an unresolved append; manual recovery is required."
+                    .into(),
+            );
         }
         checkpoint.pending = Some(PendingCheckpoint {
             event_count: sequence,
@@ -1106,11 +1114,13 @@ mod tests {
     fn weakened_immutability_trigger_fails_closed_on_reopen() {
         let path = initialized_path();
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch(
-            "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
              CREATE TRIGGER trg_mt5_risk_decision_events_no_update
              BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(IGNORE); END;",
-        ).unwrap();
+            )
+            .unwrap();
         assert!(initialize(&connection)
             .unwrap_err()
             .contains("differs from the required append-only policy"));

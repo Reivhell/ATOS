@@ -9,17 +9,17 @@ function requireDesktopRuntime(capability: Parameters<typeof assertNativeRuntime
   assertNativeRuntime(isDesktopRuntime(), capability);
 }
 
-export async function calculateTechnicalIndicatorReadings(candles: Candle[]): Promise<TechnicalIndicatorReading[]> {
+export async function calculateTechnicalIndicatorReadings(candles: readonly Candle[]): Promise<TechnicalIndicatorReading[]> {
   requireDesktopRuntime('technical indicators');
   return invoke<TechnicalIndicatorReading[]>('calculate_technical_indicator_readings', { candles });
 }
 
-export async function calculateNativeIndicatorSignals(candles: Candle[]): Promise<NativeIndicatorSignalSnapshot> {
+export async function calculateNativeIndicatorSignals(candles: readonly Candle[]): Promise<NativeIndicatorSignalSnapshot> {
   requireDesktopRuntime('native indicator signals');
   return invoke<NativeIndicatorSignalSnapshot>('calculate_native_indicator_signals', { candles });
 }
 
-export async function calculateNativeMarketStructure(candles: Candle[]): Promise<NativeStructureSnapshot> {
+export async function calculateNativeMarketStructure(candles: readonly Candle[]): Promise<NativeStructureSnapshot> {
   requireDesktopRuntime('market structure analysis');
   return invoke<NativeStructureSnapshot>('calculate_native_market_structure', { candles });
 }
