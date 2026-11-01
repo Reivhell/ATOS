@@ -2432,16 +2432,14 @@ mod tests {
                 subscribed_timeframes: &timeframes,
             })
         };
-        assert!(
-            validate_scope(
-                "12345",
-                "Broker-Live",
-                &Mt5MarketDataBatch::default(),
-                &schedules,
-                1
-            )
-            .is_ok()
-        );
+        assert!(validate_scope(
+            "12345",
+            "Broker-Live",
+            &Mt5MarketDataBatch::default(),
+            &schedules,
+            1
+        )
+        .is_ok());
         assert!(
             validate_scope(
                 "12345",
