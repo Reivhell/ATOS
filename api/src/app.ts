@@ -63,7 +63,9 @@ export function createResearchApi(options: { token: string; now?: () => number; 
     const reject = (code: string, message: string, status: 400 | 401 | 403 | 404 | 408 | 413 | 415 | 429 | 500) => {
       statusCode = status;
       outcome = classifyRequestOutcome(code, status);
-      return jsonError(code, message, status);
+      const response = jsonError(code, message, status);
+      response.headers.set('X-Request-ID', requestId);
+      return response;
     };
 
     try {
