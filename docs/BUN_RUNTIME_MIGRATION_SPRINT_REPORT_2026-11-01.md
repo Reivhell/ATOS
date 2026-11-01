@@ -2,19 +2,19 @@
 
 **Date:** 2026-11-01  
 **Repository:** `Reivhell/ATOS`  
-**Base branch:** `main`  
+**Target branch:** `dev`  
 **Working branch:** `migration/bun-runtime-primary`  
-**Sprint completion:** **70%**  
-**Status:** Bun-first workflow is implemented. Frontend, Bun guardrails/tests, API integration, Rust formatting, and Rust tests pass in PR CI; Clippy remains blocked by existing lint debt.
+**Sprint completion:** **85%**  
+**Status:** Bun-first migration and all PR CI jobs that ran are passing. Tagged desktop release validation remains pending because this PR run is not a tagged release.
 
 ## Baseline and migration results
 
-- The optional local research API already used Bun and Hono; the migration extends Bun to the primary JavaScript scripts and CI workflow.
-- A `bun.lock` lockfile is committed and CI successfully installs dependencies with `bun install --frozen-lockfile`.
-- Frontend typecheck/build, repository guardrails, the full JavaScript source suite, deterministic agent release qualification, and Hono API integration passed on the migration branch.
-- Rust formatting and Rust tests passed in CI. Clippy failed with 42 library and 44 library-test lint errors, including unused mutability, redundant pattern matching, range checks, unnecessary clones, dead code, and too-many-arguments findings across existing application and MT5 modules.
-- The Clippy failures span unrelated modules and are not evidence of a Bun runtime regression. The gate remains enabled; it must not be weakened just to obtain a green run.
-- The tagged desktop-build matrix is skipped for an untagged pull request. This CI run does not certify MetaEditor, a real MT5 terminal, or live-broker acceptance.
+- The optional local research API already used Bun and Hono; this migration extends Bun to primary JavaScript scripts and CI workflows.
+- The committed Bun lockfile installs successfully in frozen mode with `bun install --frozen-lockfile`.
+- Frontend typecheck/build, repository guardrails, the full Bun source suite, deterministic agent release qualification, and Hono API integration passed.
+- Rust formatting, `cargo test --all-targets`, and `cargo clippy --all-targets --all-features -- -D warnings` passed in the latest PR CI run.
+- Latest PR CI run: https://github.com/Reivhell/ATOS/actions/runs/41308230688
+- The tagged desktop-build matrix was skipped for an untagged pull request. This run does not certify the tagged release pipeline, MetaEditor, a real MT5 terminal, or live-broker acceptance.
 
 ## Sprint scope
 
@@ -29,21 +29,22 @@
 
 - A clean checkout installs dependencies with `bun install --frozen-lockfile`.
 - Supported scripts and JavaScript/API test suites pass under Bun in CI.
-- CI and release commands no longer require Node/npm for tasks Bun can safely own; remaining toolchain requirements are documented.
+- CI and release commands use Bun for tasks Bun can safely own, with remaining toolchain requirements documented.
 - The committed Bun lockfile is checked in frozen mode.
 - Repository guardrails and regression tests enforce the new runtime policy.
 - Release preflight remains fail-closed.
 - Reports distinguish CI results from release and broker-specific checks that have not run.
+- Tagged desktop release validation completes successfully before declaring 100%.
 
 ## Work log
 
-- Created working branch `migration/bun-runtime-primary`.
-- Updated package scripts, CI and tagged-release workflow commands, Tauri hooks, release preflight policy, and related repository contracts to use Bun.
-- Fixed release-evidence test fixtures to use the CI revision and increased the release-preflight contract test timeout.
+- Updated package scripts, CI and tagged-release workflow commands, Tauri hooks, release preflight policy, and repository contracts to use Bun.
+- Updated release-evidence fixtures to use the CI revision and increased the release-preflight contract test timeout.
 - Preserved request IDs on API body-timeout responses and extended the stalled-body integration-test timeout.
-- Changed two mutable Rust atomic guards from `const` to `static` after Clippy exposed the interior-mutability issue.
-- Latest PR CI run `41305860063`: frontend build passed; Bun guardrails/full source tests passed; Bun/Hono integration passed; Rust formatting and tests passed; Clippy failed on existing lint debt. Tagged desktop builds were skipped as expected for an untagged PR.
+- Changed Rust atomic guards from `const` to `static` to respect interior mutability.
+- Resolved Clippy findings without weakening the `-D warnings` gate.
+- Latest PR CI run `41308230688`: frontend, Bun guardrails/source tests, deterministic release qualification, API integration, Rust formatting, Rust tests, and Clippy all passed. Tagged desktop builds were skipped as expected for an untagged PR.
 
 ## Next step
 
-Decide whether to open a separate, scoped Rust lint-cleanup change. Keep the Bun migration PR focused, preserve the Clippy gate, and run tagged-release validation before calling the migration complete.
+Run and verify the tagged desktop release path, review its release evidence and artifacts, then mark the migration complete. MT5/MetaEditor and live-broker acceptance remain separate operational gates.
