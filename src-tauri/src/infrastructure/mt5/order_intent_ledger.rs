@@ -117,21 +117,26 @@ impl Mt5OrderIntentLedger {
             .map_err(|_| "MT5 order-intent database could not be opened.".to_string())?;
         connection
             .busy_timeout(std::time::Duration::from_secs(5))
-            .map_err(|_| "MT5 order-intent database timeout could not be configured.".to_string())?;
+            .map_err(|_| {
+                "MT5 order-intent database timeout could not be configured.".to_string()
+            })?;
         connection
             .execute_batch(
                 "PRAGMA journal_mode=WAL;
                  PRAGMA synchronous=FULL;
                  PRAGMA foreign_keys=ON;",
             )
-            .map_err(|_| "MT5 order-intent database safety settings could not be applied.".to_string())?;
+            .map_err(|_| {
+                "MT5 order-intent database safety settings could not be applied.".to_string()
+            })?;
         let mut ledger = Self { connection };
         ledger.initialize()?;
         Ok(ledger)
     }
 
     fn initialize(&mut self) -> Result<(), String> {
-        let tx = self.connection
+        let tx = self
+            .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| "MT5 order-intent schema transaction could not start.".to_string())?;
         tx.execute_batch(
@@ -167,7 +172,8 @@ impl Mt5OrderIntentLedger {
              );
              CREATE INDEX IF NOT EXISTS mt5_order_intents_unresolved
                 ON mt5_order_intents (broker_server, account_login, state);",
-        ).map_err(|_| "MT5 order-intent schema could not be created.".to_string())?;
+        )
+        .map_err(|_| "MT5 order-intent schema could not be created.".to_string())?;
         let version: Option<i64> = tx
             .query_row(
                 "SELECT version FROM mt5_order_intent_schema WHERE singleton=1",
@@ -185,10 +191,14 @@ impl Mt5OrderIntentLedger {
                 tx.execute(
                     "INSERT INTO mt5_order_intent_schema (singleton, version) VALUES (1, ?1)",
                     [SCHEMA_VERSION],
-                ).map_err(|_| "MT5 order-intent schema version could not be recorded.".to_string())?;
+                )
+                .map_err(|_| {
+                    "MT5 order-intent schema version could not be recorded.".to_string()
+                })?;
             }
         }
-        tx.commit().map_err(|_| "MT5 order-intent schema transaction could not commit.".to_string())
+        tx.commit()
+            .map_err(|_| "MT5 order-intent schema transaction could not commit.".to_string())
     }
 
     pub fn prepare(&mut self, intent: &NewOrderIntent) -> Result<OrderIntentRecord, String> {
@@ -197,7 +207,8 @@ impl Mt5OrderIntentLedger {
             .map_err(|_| "MT5 order intent could not be fingerprinted.".to_string())?;
         let payload_sha256 = hex_sha256(&canonical_intent);
         let now = Utc::now().to_rfc3339();
-        let tx = self.connection
+        let tx = self
+            .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| "MT5 order-intent transaction could not start.".to_string())?;
         let existing: Option<OrderIntentRecord> = tx
@@ -207,16 +218,23 @@ impl Mt5OrderIntentLedger {
                         created_at, updated_at
                  FROM mt5_order_intents
                  WHERE broker_server=?1 AND account_login=?2 AND idempotency_key=?3",
-                params![intent.broker_server, intent.account_login, intent.idempotency_key],
+                params![
+                    intent.broker_server,
+                    intent.account_login,
+                    intent.idempotency_key
+                ],
                 row_to_record,
             )
             .optional()
             .map_err(|_| "Existing MT5 order intent could not be read.".to_string())?;
         if let Some(record) = existing {
             if record.payload_sha256 != payload_sha256 {
-                return Err("Idempotency key was already used for a different order payload.".into());
+                return Err(
+                    "Idempotency key was already used for a different order payload.".into(),
+                );
             }
-            tx.commit().map_err(|_| "MT5 order-intent transaction could not commit.".to_string())?;
+            tx.commit()
+                .map_err(|_| "MT5 order-intent transaction could not commit.".to_string())?;
             return Ok(record);
         }
 
@@ -237,7 +255,8 @@ impl Mt5OrderIntentLedger {
              (intent_id, from_state, to_state, detail, occurred_at)
              VALUES (?1,NULL,'prepared','intent_persisted_before_dispatch',?2)",
             params![intent_id, now],
-        ).map_err(|_| "MT5 order-intent audit event could not be persisted.".to_string())?;
+        )
+        .map_err(|_| "MT5 order-intent audit event could not be persisted.".to_string())?;
         let record = tx.query_row(
             "SELECT intent_id, broker_server, account_login, idempotency_key, payload_sha256,
                     symbol, side, volume, stop_loss, take_profit, state, broker_order_ticket,
@@ -246,7 +265,8 @@ impl Mt5OrderIntentLedger {
             [&intent_id],
             row_to_record,
         ).map_err(|_| "Persisted MT5 order intent could not be reloaded.".to_string())?;
-        tx.commit().map_err(|_| "MT5 order-intent transaction could not commit.".to_string())?;
+        tx.commit()
+                .map_err(|_| "MT5 order-intent transaction could not commit.".to_string())?;
         Ok(record)
     }
 
@@ -262,13 +282,19 @@ impl Mt5OrderIntentLedger {
             return Err("Order-intent transition detail is empty or exceeds the limit.".into());
         }
         if !expected.allows(next) {
-            return Err(format!("Illegal MT5 order-intent transition: {} -> {}.", expected.as_str(), next.as_str()));
+            return Err(format!(
+                "Illegal MT5 order-intent transition: {} -> {}.",
+                expected.as_str(),
+                next.as_str()
+            ));
         }
-        if broker_order_ticket.is_some_and(|ticket| ticket.trim().is_empty() || ticket.len() > 128) {
+        if broker_order_ticket.is_some_and(|ticket| ticket.trim().is_empty() || ticket.len() > 128)
+        {
             return Err("Broker order ticket is invalid.".into());
         }
         let now = Utc::now().to_rfc3339();
-        let tx = self.connection
+        let tx = self
+            .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|_| "MT5 order-intent transaction could not start.".to_string())?;
         let current: String = tx.query_row(
@@ -291,7 +317,8 @@ impl Mt5OrderIntentLedger {
              (intent_id, from_state, to_state, detail, occurred_at)
              VALUES (?1,?2,?3,?4,?5)",
             params![intent_id, expected.as_str(), next.as_str(), detail, now],
-        ).map_err(|_| "MT5 order-intent audit event could not be persisted.".to_string())?;
+        )
+        .map_err(|_| "MT5 order-intent audit event could not be persisted.".to_string())?;
         let record = tx.query_row(
             "SELECT intent_id, broker_server, account_login, idempotency_key, payload_sha256,
                     symbol, side, volume, stop_loss, take_profit, state, broker_order_ticket,
@@ -300,11 +327,16 @@ impl Mt5OrderIntentLedger {
             [intent_id],
             row_to_record,
         ).map_err(|_| "Updated MT5 order intent could not be reloaded.".to_string())?;
-        tx.commit().map_err(|_| "MT5 order-intent transaction could not commit.".to_string())?;
+        tx.commit()
+                .map_err(|_| "MT5 order-intent transaction could not commit.".to_string())?;
         Ok(record)
     }
 
-    pub fn unresolved(&self, broker_server: &str, account_login: &str) -> Result<Vec<OrderIntentRecord>, String> {
+    pub fn unresolved(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Vec<OrderIntentRecord>, String> {
         let mut statement = self.connection.prepare(
             "SELECT intent_id, broker_server, account_login, idempotency_key, payload_sha256,
                     symbol, side, volume, stop_loss, take_profit, state, broker_order_ticket,
@@ -313,7 +345,8 @@ impl Mt5OrderIntentLedger {
              WHERE broker_server=?1 AND account_login=?2 AND state IN ('prepared','dispatching','unknown')
              ORDER BY created_at ASC",
         ).map_err(|_| "Unresolved MT5 order intents could not be queried.".to_string())?;
-        let rows = statement.query_map(params![broker_server, account_login], row_to_record)
+        let rows = statement
+            .query_map(params![broker_server, account_login], row_to_record)
             .map_err(|_| "Unresolved MT5 order intents could not be read.".to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|_| "Unresolved MT5 order intent record is malformed.".to_string())
@@ -356,15 +389,21 @@ fn validate_new_intent(intent: &NewOrderIntent) -> Result<(), String> {
         ("side", intent.side.as_str(), 8),
     ] {
         if value.trim().is_empty() || value.len() > max {
-            return Err(format!("MT5 order-intent {label} is empty or exceeds the limit."));
+            return Err(format!(
+                "MT5 order-intent {label} is empty or exceeds the limit."
+            ));
         }
     }
     if !matches!(intent.side.as_str(), "buy" | "sell") {
         return Err("MT5 order-intent side must be buy or sell.".into());
     }
-    if !intent.volume.is_finite() || intent.volume <= 0.0
-        || !intent.stop_loss.is_finite() || intent.stop_loss <= 0.0
-        || intent.take_profit.is_some_and(|v| !v.is_finite() || v <= 0.0)
+    if !intent.volume.is_finite()
+        || intent.volume <= 0.0
+        || !intent.stop_loss.is_finite()
+        || intent.stop_loss <= 0.0
+        || intent
+            .take_profit
+            .is_some_and(|v| !v.is_finite() || v <= 0.0)
     {
         return Err("MT5 order-intent price or volume is invalid.".into());
     }
@@ -467,6 +506,9 @@ mod tests {
         let mut invalid = intent("key-1");
         invalid.volume = f64::NAN;
         assert!(ledger.prepare(&invalid).is_err());
-        assert!(ledger.unresolved("demo-server", "123456").unwrap().is_empty());
+        assert!(ledger
+            .unresolved("demo-server", "123456")
+            .unwrap()
+            .is_empty());
     }
 }
