@@ -8,7 +8,7 @@ const run = (args) => {
   if (result.status !== 0) {
     throw new Error(result.stderr.trim() || `git ${args.join(' ')} failed`);
   }
-  return result.stdout.trim();
+  return result.stdout;
 };
 
 const policyPath = path.join(root, 'docs/architecture/RUST_FIRST_MIGRATION.md');
@@ -17,37 +17,35 @@ if (!fs.existsSync(policyPath)) {
   process.exit(1);
 }
 
-let changed;
+let diff;
 try {
-  changed = run(['diff', '--name-status', '--find-renames', 'HEAD^1', 'HEAD'])
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => line.split('\t'));
+  diff = run(['diff', '--unified=0', '--find-renames', 'HEAD^1', 'HEAD', '--', 'src', 'api/src']);
 } catch (error) {
   console.error(`Cannot inspect the commit diff for Rust-first architecture enforcement: ${error.message}`);
   process.exit(1);
 }
 
 const violations = [];
-for (const entry of changed) {
-  const status = entry[0];
-  const file = entry.at(-1);
-  if (!file) continue;
-  const added = status === 'A' || status.startsWith('C');
-  if (!added) continue;
-
-  if (/^(src|api\/src)\/.+\.js$/i.test(file)) {
-    violations.push(`${file}: new production JavaScript modules are not allowed; use Rust for business logic or TypeScript for UI/IPC.`);
+let currentPath = '';
+for (const line of diff.split('\n')) {
+  if (line.startsWith('+++ b/')) {
+    currentPath = line.slice(6);
+    continue;
   }
-  if (/^src\/lib\/(domain|application|engines|infrastructure)\/.+\.tsx?$/i.test(file)) {
-    violations.push(`${file}: new TypeScript modules in core logic layers are not allowed; implement the business rule in Rust.`);
+  if (!line.startsWith('+') || line.startsWith('+++')) continue;
+
+  if (/^(src|api\/src)\/.+\.js$/i.test(currentPath)) {
+    violations.push(`${currentPath}: added production JavaScript is blocked; move business logic to Rust or keep the UI boundary in TypeScript.`);
+  }
+  if (/^src\/lib\/(domain|application|engines|infrastructure)\/.+\.tsx?$/i.test(currentPath)) {
+    violations.push(`${currentPath}: added TypeScript core logic is blocked; implement the business rule in Rust.`);
   }
 }
 
 if (violations.length) {
   console.error(`Rust-first architecture gate failed (${violations.length} violation(s)):`);
-  for (const violation of violations) console.error(`- ${violation}`);
+  for (const violation of new Set(violations)) console.error(`- ${violation}`);
   process.exit(1);
 }
 
-console.log('Rust-first architecture gate passed: no new JavaScript production modules or TypeScript core-logic modules were added.');
+console.log('Rust-first architecture gate passed: no new JavaScript production logic or TypeScript core logic was added.');
