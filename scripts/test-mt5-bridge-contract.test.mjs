@@ -126,18 +126,18 @@ test('native snapshot validation enforces terminal, permissions and broker contr
   assert.match(native, /symbol\.point <= 0\.0 \|\| symbol\.tick_size <= 0\.0/);
   assert.match(native, /symbol\.volume_min\s*<=\s*0\.0\s*\|\|\s*symbol\.volume_max\s*<\s*symbol\.volume_min/);
   assert.match(native, /validate_market_data_scope/);
-  assert.match(native, /snapshot\.account\.login != authenticated_login/);
-  assert.match(native, /snapshot\.account\.server != authenticated_server/);
+  assert.match(native, /snapshot\.account\.login != authenticated_account\.0/);
+  assert.match(native, /snapshot\.account\.server != authenticated_account\.1/);
   assert.match(native, /outside the authenticated subscription/);
   assert.match(native, /frame_scope_binds_account_and_market_data_to_authenticated_subscriptions/);
 });
 
 test('authenticated account identity and series scope are enforced before market-data commit', () => {
   assert.match(native, /validate_market_data_scope\(/);
-  assert.match(native, /snapshot\.account\.login != authenticated_login/);
-  assert.match(native, /snapshot\.account\.server != authenticated_server/);
+  assert.match(native, /snapshot\.account\.login != authenticated_account\.0/);
+  assert.match(native, /snapshot\.account\.server != authenticated_account\.1/);
   assert.match(native, /tick\.symbol\.as_str\(\)/);
   assert.match(native, /bar\.timeframe\.as_str\(\)/);
   assert.match(native, /frame_scope_binds_account_and_market_data_to_authenticated_subscriptions/);
-  assert.match(native, /validate_market_data_scope\(\s*&auth\.account_login/);
+  assert.match(native, /validate_market_data_scope\(\s*\(&auth\.account_login,\s*&auth\.broker_server\)/);
 });
