@@ -8,12 +8,12 @@
     Sparkles, Square, Terminal, TrendingDown, TrendingUp, Wallet, X, Zap, BookOpen, Layers3,
   } from 'lucide-svelte';
   import {
-    getAuditHistory, getCandleSeries, getDashboardState, isDesktopRuntime, placePaperOrder, refreshMarketData, refreshMemeScreener, resetPaperAccount,
+    calculateTechnicalIndicatorReadings, getAuditHistory, getCandleSeries, getDashboardState, isDesktopRuntime, placePaperOrder, refreshMarketData, refreshMemeScreener, resetPaperAccount,
     runBacktest, setAgentRunning, setKillSwitch, updateRiskLimits,
     createResearchHypothesis, invalidateResearchHypothesis, executeResearchWorkflow, getResearchRunCard, listResearchHypotheses,
     listResearchRunCards, verifyResearchWorkspace,
   } from './lib/adapters/tauri/bridge';
-  import type { Agent, AuditEvent, BacktestRequest, BacktestResult, Candle, CandleSeriesRequest, ValidatedCandleSeriesSnapshot, DashboardSnapshot, PaperOrder, Quote, ScreenerToken, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord } from './lib/types';
+  import type { Agent, AuditEvent, BacktestRequest, BacktestResult, Candle, CandleSeriesRequest, ValidatedCandleSeriesSnapshot, DashboardSnapshot, PaperOrder, Quote, ScreenerToken, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, TechnicalIndicatorReading } from './lib/types';
   import { auditEventsToCsv, backtestReportToJson } from './lib/infrastructure/serialization/exports.js';
   import { TECHNICAL_ANALYSIS_CATALOG, TECHNICAL_ANALYSIS_CATEGORIES, TECHNICAL_ANALYSIS_MASTER_LIST_VERSION } from './lib/domain/technical-analysis/catalog.js';
   import { createTechnicalAnalysisReport } from './lib/application/technical-analysis-service.js';
@@ -50,6 +50,8 @@
   let selectedSymbol = '';
   let activeCandleRequest: CandleSeriesRequest = { symbol: 'BTCUSDT', interval: '5m' };
   let chartSeriesResponse: ValidatedCandleSeriesSnapshot | null = null;
+  let technicalReadings: TechnicalIndicatorReading[] = [];
+  let indicatorRequestEpoch = 0;
   let chartSeriesBusy = false;
   let chartSeriesError = '';
   let chartRequestEpoch = 0;
@@ -270,6 +272,7 @@
     } catch (error) {
       errorMessage = toMessage(error);
       chartSeriesResponse = null;
+      technicalReadings = [];
       chartSeriesError = toMessage(error);
     } finally {
       loading = false;
@@ -280,6 +283,7 @@
     const requestEpoch = ++chartRequestEpoch;
     chartSeriesBusy = true;
     chartSeriesResponse = null;
+    technicalReadings = [];
     chartSeriesError = '';
     try {
       const typedRequest = buildCandleSeriesRequest(snapshot?.marketDataCapabilities, request.symbol, request.interval);
@@ -288,12 +292,34 @@
       if (requestEpoch !== chartRequestEpoch) return null;
       chartSeriesResponse = validatedResponse;
       activeCandleRequest = validatedResponse.request;
+      await refreshNativeIndicatorReadings(validatedResponse);
       return validatedResponse;
     } catch (error) {
       if (requestEpoch === chartRequestEpoch) chartSeriesError = toMessage(error);
       return null;
     } finally {
       if (requestEpoch === chartRequestEpoch) chartSeriesBusy = false;
+    }
+  }
+
+  async function refreshNativeIndicatorReadings(series: ValidatedCandleSeriesSnapshot) {
+    const requestEpoch = ++indicatorRequestEpoch;
+    if (!desktop) {
+      technicalReadings = [];
+      return;
+    }
+    try {
+      const readings = await calculateTechnicalIndicatorReadings(series.candles);
+      if (requestEpoch === indicatorRequestEpoch) technicalReadings = readings;
+    } catch (error) {
+      if (requestEpoch !== indicatorRequestEpoch) return;
+      technicalReadings = ['sma', 'ema', 'rsi', 'macd', 'atr', 'bollinger'].map((key) => ({
+        key,
+        title: key.toUpperCase(),
+        value: 'Unavailable',
+        detail: `Native Rust indicator calculation failed: ${toMessage(error)}`,
+        available: false,
+      }));
     }
   }
 
@@ -590,7 +616,6 @@
     requestedSymbol: activeCandleRequest.symbol,
     requestedTimeframe: activeCandleRequest.interval,
   });
-  $: technicalReadings = technicalEnvelope.indicatorReadings;
   $: lastCandleSummary = summarizeLastCandle(candles);
   $: orderChartAligned = isOrderChartAligned(selectedSymbol, activeCandleRequest);
   $: activeSeriesCapability = snapshot?.marketDataCapabilities.candleSeries.find((series) => series.symbol === activeCandleRequest.symbol && series.interval === activeCandleRequest.interval);
