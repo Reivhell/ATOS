@@ -1928,6 +1928,7 @@ fn canonical_evidence_ref_matches_snapshot(reference: &str, snapshot_sha256: &st
     };
     let valid_token = |value: &str| {
         !value.is_empty()
+            && value.split('/').all(|segment| !segment.is_empty() && !segment.starts_with('.'))
             && value.bytes().all(|byte| {
                 byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/' | b'~')
             })
@@ -3217,6 +3218,14 @@ mod tests {
         ));
         assert!(!canonical_evidence_ref_matches_snapshot(
             &format!("snapshot:{digest}:binance:../private"),
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:binance:BTCUSDT//1h"),
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:binance:BTCUSDT/./1h"),
             &digest
         ));
         assert!(!canonical_evidence_ref_matches_snapshot(
