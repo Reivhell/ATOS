@@ -1,3 +1,32 @@
+export interface NativeStructurePivot {
+  kind: string;
+  classification: string;
+  pivotIndex: number;
+  confirmedAtIndex: number;
+  pivotAtMs: number;
+  confirmedAtMs: number;
+  price: number;
+}
+
+export interface NativeStructureBreak {
+  direction: string;
+  classification: string;
+  levelKind: string;
+  level: number;
+  pivotIndex: number;
+  levelConfirmedAtIndex: number;
+  brokenAtIndex: number;
+  brokenAtMs: number;
+  close: number;
+  priorBias: string;
+}
+
+export interface NativeStructureSnapshot {
+  pivots: NativeStructurePivot[];
+  breaks: NativeStructureBreak[];
+  bias: string;
+}
+
 export interface TechnicalIndicatorReading {
   key: string;
   title: string;
