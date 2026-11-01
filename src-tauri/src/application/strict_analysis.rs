@@ -2052,9 +2052,9 @@ fn validate_candle_snapshot(
         .timestamp_millis();
     let mut previous_time = i64::MIN;
     for (index, candle) in candles.iter().enumerate() {
-        if candle.time <= previous_time {
+        if candle.time <= 0 || candle.time <= previous_time {
             return Err(format!(
-                "Strict market-data timestamps must be strictly increasing (invalid row {index})."
+                "Strict market-data timestamps must be positive and strictly increasing (invalid row {index})."
             ));
         }
         if candle.time > as_of_ms {
@@ -3188,6 +3188,23 @@ mod tests {
             .reasons
             .iter()
             .any(|reason| reason.contains("identity/contract/agent routing mismatch")));
+        assert!(result.next_layer_payload.is_none());
+    }
+
+    #[test]
+    fn strict_snapshot_rejects_non_positive_candle_timestamps() {
+        let plan = sample_plan();
+        let mut req = request(plan.clone(), assessments_for(&plan));
+        req.market_data.candles[0].time = 0;
+        req.market_data.dataset_sha256 = dataset_sha256(&req.market_data.candles);
+        for assessment in &mut req.assessments {
+            if assessment.status == "evaluated" {
+                assessment.data_snapshot_id = req.market_data.dataset_sha256.clone();
+            }
+        }
+        let result = evaluate_completion(req).unwrap();
+        assert!(!result.allowed);
+        assert!(result.reasons.iter().any(|reason| reason.contains("timestamps must be positive and strictly increasing")));
         assert!(result.next_layer_payload.is_none());
     }
 
