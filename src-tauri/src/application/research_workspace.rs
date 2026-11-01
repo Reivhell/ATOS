@@ -669,14 +669,8 @@ impl ResearchWorkspace {
                 .filter(|score| score.qualifies_for_selection)
                 .min_by(|left, right| {
                     compare_tournament_candidate_priority(
-                        left.training_sharpe_ratio,
-                        left.training_max_drawdown_pct,
-                        left.fast_period,
-                        left.slow_period,
-                        right.training_sharpe_ratio,
-                        right.training_max_drawdown_pct,
-                        right.fast_period,
-                        right.slow_period,
+                        (left.training_sharpe_ratio, left.training_max_drawdown_pct, left.fast_period, left.slow_period),
+                        (right.training_sharpe_ratio, right.training_max_drawdown_pct, right.fast_period, right.slow_period),
                     )
                 });
 
