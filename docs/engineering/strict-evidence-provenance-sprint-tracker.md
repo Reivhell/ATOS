@@ -5,9 +5,9 @@ Scope: strict-analysis evidence validation only. This percentage does not repres
 Last updated: 2026-11-01
 Working branch: `dev`
 
-## Overall progress: 75%
+## Overall progress: 65%
 
-Progress is a weighted checklist, not a subjective estimate of production readiness. A completed source-level check is not counted as a passing test unless the test has actually run.
+Progress is a weighted checklist, not a subjective estimate of production readiness. A completed source-level check is not counted as a passing test unless the test has actually run. The total uses the listed work-package weights, which sum to 100%.
 
 | Work package | Weight | Progress | Evidence / exit criteria |
 |---|---:|---:|---|
