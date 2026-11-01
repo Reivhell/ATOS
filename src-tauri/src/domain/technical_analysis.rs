@@ -180,6 +180,40 @@ fn bollinger(values: &[f64], period: usize) -> Option<(f64, f64, f64)> {
     Some((mean + 2.0 * deviation, mean, mean - 2.0 * deviation))
 }
 
+fn validate_candles(candles: &[Candle], context: &str) -> Result<(), String> {
+    let mut previous_time = None;
+    for (index, candle) in candles.iter().enumerate() {
+        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
+            let message = match context {
+                "Indicator" => format!("Candle {} timestamp must be positive and strictly increasing.", index + 1),
+                "Signal" => format!("Signal candle {} timestamp must be positive and strictly increasing.", index + 1),
+                _ => format!("Structure candle {index} has a non-positive or non-increasing timestamp."),
+            };
+            return Err(message);
+        }
+        previous_time = Some(candle.time);
+        if ![candle.open, candle.high, candle.low, candle.close, candle.volume]
+            .iter()
+            .all(|value| value.is_finite())
+            || candle.open <= 0.0
+            || candle.high <= 0.0
+            || candle.low <= 0.0
+            || candle.close <= 0.0
+            || candle.volume < 0.0
+            || candle.high < candle.open.max(candle.close).max(candle.low)
+            || candle.low > candle.open.min(candle.close).min(candle.high)
+        {
+            let message = match context {
+                "Indicator" => format!("Candle {} violates positive-price, non-negative-volume, or OHLC range invariants.", index + 1),
+                "Signal" => format!("Signal candle {} violates OHLCV invariants.", index + 1),
+                _ => format!("Structure candle {index} violates positive-price, non-negative-volume, or OHLC invariants."),
+            };
+            return Err(message);
+        }
+    }
+    Ok(())
+}
+
 fn unavailable_readings(count: usize, reason: &str) -> Vec<IndicatorReading> {
     [
         ("sma", "SMA · 9 / 21", 21),
@@ -208,30 +242,8 @@ pub fn calculate_readings(candles: &[Candle]) -> Result<Vec<IndicatorReading>, S
     if candles.len() > MAX_CANDLES {
         return Err(format!("Indicator input exceeds the {MAX_CANDLES}-candle safety limit."));
     }
-    let mut previous_time = None;
-    for (index, candle) in candles.iter().enumerate() {
-        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
-            return Ok(unavailable_readings(candles.len(), &format!(
-                "Candle {} timestamp must be positive and strictly increasing.", index + 1
-            )));
-        }
-        previous_time = Some(candle.time);
-        if ![candle.open, candle.high, candle.low, candle.close, candle.volume]
-            .iter()
-            .all(|value| value.is_finite())
-            || candle.open <= 0.0
-            || candle.high <= 0.0
-            || candle.low <= 0.0
-            || candle.close <= 0.0
-            || candle.volume < 0.0
-            || candle.high < candle.open.max(candle.close).max(candle.low)
-            || candle.low > candle.open.min(candle.close).min(candle.high)
-        {
-            return Ok(unavailable_readings(candles.len(), &format!(
-                "Candle {} violates positive-price, non-negative-volume, or OHLC range invariants.",
-                index + 1
-            )));
-        }
+    if let Err(reason) = validate_candles(candles, "Indicator") {
+        return Ok(unavailable_readings(candles.len(), &reason));
     }
 
     let closes: Vec<f64> = candles.iter().map(|candle| candle.close).collect();
@@ -334,21 +346,7 @@ pub fn calculate_signal_snapshot(candles: &[Candle]) -> Result<NativeIndicatorSi
     if candles.len() > MAX_CANDLES {
         return Err(format!("Signal input exceeds the {MAX_CANDLES}-candle safety limit."));
     }
-    let mut previous_time = None;
-    for (index, candle) in candles.iter().enumerate() {
-        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
-            return Err(format!("Signal candle {} timestamp must be positive and strictly increasing.", index + 1));
-        }
-        previous_time = Some(candle.time);
-        if ![candle.open, candle.high, candle.low, candle.close, candle.volume].iter().all(|value| value.is_finite())
-            || candle.open <= 0.0 || candle.high <= 0.0 || candle.low <= 0.0 || candle.close <= 0.0
-            || candle.volume < 0.0
-            || candle.high < candle.open.max(candle.close).max(candle.low)
-            || candle.low > candle.open.min(candle.close).min(candle.high)
-        {
-            return Err(format!("Signal candle {} violates OHLCV invariants.", index + 1));
-        }
-    }
+    validate_candles(candles, "Signal")?;
 
     let closes: Vec<f64> = candles.iter().map(|candle| candle.close).collect();
     let close = closes.last().copied();
@@ -425,21 +423,7 @@ pub fn calculate_structure(candles: &[Candle]) -> Result<NativeStructureSnapshot
     if candles.len() > MAX_CANDLES {
         return Err(format!("Structure input exceeds the {MAX_CANDLES}-candle safety limit."));
     }
-    let mut previous_time = None;
-    for (index, candle) in candles.iter().enumerate() {
-        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
-            return Err(format!("Structure candle {index} has a non-positive or non-increasing timestamp."));
-        }
-        previous_time = Some(candle.time);
-        if ![candle.open, candle.high, candle.low, candle.close, candle.volume].iter().all(|value| value.is_finite())
-            || candle.open <= 0.0 || candle.high <= 0.0 || candle.low <= 0.0 || candle.close <= 0.0
-            || candle.volume < 0.0
-            || candle.high < candle.open.max(candle.close).max(candle.low)
-            || candle.low > candle.open.min(candle.close).min(candle.high)
-        {
-            return Err(format!("Structure candle {index} violates positive-price, non-negative-volume, or OHLC invariants."));
-        }
-    }
+    validate_candles(candles, "Structure")?;
     let pivots = research_smc::classify_confirmed_swings(candles, 2, 2)?
         .into_iter()
         .map(NativeStructurePivot::from)
