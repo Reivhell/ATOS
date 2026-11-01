@@ -2824,16 +2824,26 @@ mod tests {
 
     #[test]
     fn strict_completion_rejects_untrusted_market_source_labels() {
-        let plan = sample_plan();
-        let assessments = assessments_for(&plan);
-        let mut req = request(plan, assessments);
-        req.market_data.source = "test-fixture".into();
-        let result = evaluate_completion(req).unwrap();
-        assert!(result.reasons.iter().any(|reason| {
-            reason.contains("trusted Rust-owned Binance public REST provenance")
-        }));
-        assert!(!result.allowed);
-        assert!(result.next_layer_payload.is_none());
+        for source in [
+            "test-fixture",
+            "Binance public REST spoof",
+            "Binance public REST-extra",
+            "MT5 terminal",
+        ] {
+            let plan = sample_plan();
+            let assessments = assessments_for(&plan);
+            let mut req = request(plan, assessments);
+            req.market_data.source = source.into();
+            let result = evaluate_completion(req).unwrap();
+            assert!(
+                result.reasons.iter().any(|reason| {
+                    reason.contains("trusted Rust-owned Binance public REST provenance")
+                }),
+                "untrusted source accepted: {source}"
+            );
+            assert!(!result.allowed);
+            assert!(result.next_layer_payload.is_none());
+        }
     }
 
     #[test]
