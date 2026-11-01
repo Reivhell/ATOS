@@ -155,7 +155,7 @@ export function createResearchApi(options: { token: string; now?: () => number; 
   app.post('/v1/analysis', async (c) => {
     const bounded = await readBoundedBody(c.req.raw);
     if (bounded.kind === 'too_large') return jsonError('body_too_large', 'Request body exceeds the 2 MiB limit.', 413);
-    if (bounded.kind === 'timed_out') return jsonError('request_timeout', 'Request body was not received within the allowed time.', 408);
+    if (bounded.kind === 'timed_out') return c.json({ error: { code: 'request_timeout', message: 'Request body was not received within the allowed time.' }, contractVersion: LOCAL_RESEARCH_API_CONTRACT }, 408);
     if (bounded.kind === 'invalid_utf8') return jsonError('invalid_encoding', 'Request body must be valid UTF-8.', 400);
     if (bounded.kind === 'read_error') return jsonError('body_read_failed', 'Request body could not be read safely.', 400);
     let payload: unknown;
