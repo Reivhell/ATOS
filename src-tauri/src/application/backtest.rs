@@ -179,20 +179,23 @@ const TOURNAMENT_WORK_BUDGET: u64 = 50_000_000;
 /// Ordering used by both the selector and the persisted-evidence verifier.
 /// `Less` means the left candidate is preferred. All score comparisons are exact
 /// total-order float comparisons; no tolerance-based tie can disagree with verification.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TournamentCandidatePriority {
+    pub(crate) sharpe: f64,
+    pub(crate) drawdown: f64,
+    pub(crate) fast: usize,
+    pub(crate) slow: usize,
+}
+
 pub(crate) fn compare_tournament_candidate_priority(
-    left_sharpe: f64,
-    left_drawdown: f64,
-    left_fast: usize,
-    left_slow: usize,
-    right_sharpe: f64,
-    right_drawdown: f64,
-    right_fast: usize,
-    right_slow: usize,
+    left: TournamentCandidatePriority,
+    right: TournamentCandidatePriority,
 ) -> std::cmp::Ordering {
-    right_sharpe
-        .total_cmp(&left_sharpe)
-        .then_with(|| left_drawdown.total_cmp(&right_drawdown))
-        .then_with(|| (left_fast, left_slow).cmp(&(right_fast, right_slow)))
+    right
+        .sharpe
+        .total_cmp(&left.sharpe)
+        .then_with(|| left.drawdown.total_cmp(&right.drawdown))
+        .then_with(|| (left.fast, left.slow).cmp(&(right.fast, right.slow)))
 }
 
 /// Runs an expanding-window, nested walk-forward tournament over a bounded SMA
@@ -206,7 +209,7 @@ pub fn run_walk_forward_parameter_tournament(
     source: &str,
     requested_folds: usize,
 ) -> Result<StrategyParameterTournament, String> {
-    if requested_folds < 2 || requested_folds > TOURNAMENT_MAX_FOLDS {
+    if !(2..=TOURNAMENT_MAX_FOLDS).contains(&requested_folds) {
         return Err(format!(
             "Walk-forward tournament requires 2 to {TOURNAMENT_MAX_FOLDS} folds."
         ));
@@ -330,14 +333,18 @@ pub fn run_walk_forward_parameter_tournament(
             let replace =
                 selected.is_none_or(|(best_fast, best_slow, best_sharpe, best_drawdown)| {
                     compare_tournament_candidate_priority(
-                        training_result.sharpe_ratio,
-                        training_result.max_drawdown_pct.abs(),
-                        *fast,
-                        *slow,
-                        best_sharpe,
-                        best_drawdown,
-                        best_fast,
-                        best_slow,
+                        TournamentCandidatePriority {
+                            sharpe: training_result.sharpe_ratio,
+                            drawdown: training_result.max_drawdown_pct.abs(),
+                            fast: *fast,
+                            slow: *slow,
+                        },
+                        TournamentCandidatePriority {
+                            sharpe: best_sharpe,
+                            drawdown: best_drawdown,
+                            fast: best_fast,
+                            slow: best_slow,
+                        },
                     )
                     .is_lt()
                 });
@@ -689,8 +696,8 @@ fn run_once(
         return Err("Benchmark quantity is outside the supported numeric range.".into());
     }
 
-    for i in evaluation_start_index..candles.len() {
-        let price = candles[i].close;
+    for (i, candle) in candles.iter().enumerate().skip(evaluation_start_index) {
+        let price = candle.close;
         if i > request.slow_period {
             // Detect a true crossover using two completed candles, then execute at this bar's
             // open. The execution bar's close is never used to decide the order.
@@ -713,7 +720,7 @@ fn run_once(
             let crossed_up = fast > slow && previous_fast <= previous_slow;
             let crossed_down = fast <= slow && previous_fast > previous_slow;
             if crossed_up && !in_position {
-                let fill = candles[i].open * (1.0 + slip_rate);
+                let fill = candle.open * (1.0 + slip_rate);
                 let entry_denominator = fill * (1.0 + fee_rate);
                 if !fill.is_finite()
                     || fill <= 0.0
@@ -749,7 +756,7 @@ fn run_once(
                 entry_cash_spent = total_cost;
                 in_position = true;
             } else if crossed_down && in_position {
-                let fill = candles[i].open * (1.0 - slip_rate);
+                let fill = candle.open * (1.0 - slip_rate);
                 let proceeds = quantity * fill;
                 let fee = proceeds * fee_rate;
                 let net_proceeds = proceeds - fee;
@@ -814,8 +821,6 @@ fn run_once(
         trade_pnls.push(trade_pnl);
         cash = net;
         quantity = 0.0;
-        entry_cash_spent = 0.0;
-        in_position = false;
         if let Some(last_point) = points.last_mut() {
             last_point.equity = net;
         }
@@ -1534,8 +1539,8 @@ mod tests {
             close: 11.0,
             volume: 42.0,
         };
-        let baseline = dataset_sha256(&[candle.clone()]);
-        assert_eq!(baseline, dataset_sha256(&[candle.clone()]));
+        let baseline = dataset_sha256(std::slice::from_ref(&candle));
+        assert_eq!(baseline, dataset_sha256(std::slice::from_ref(&candle)));
         let changed_time = Candle {
             time: 11,
             ..candle.clone()
@@ -1711,16 +1716,25 @@ mod tests {
     #[test]
     fn tournament_priority_uses_one_exact_order_for_selection_and_verification() {
         let slightly_better_sharpe =
-            compare_tournament_candidate_priority(1.0 + 1e-13, 9.0, 10, 30, 1.0, 1.0, 8, 24);
+            compare_tournament_candidate_priority(
+                TournamentCandidatePriority { sharpe: 1.0 + 1e-13, drawdown: 9.0, fast: 10, slow: 30 },
+                TournamentCandidatePriority { sharpe: 1.0, drawdown: 1.0, fast: 8, slow: 24 },
+            );
         assert!(
             slightly_better_sharpe.is_lt(),
             "a real Sharpe difference must not be swallowed by a tolerance"
         );
         let lower_drawdown_tie =
-            compare_tournament_candidate_priority(1.0, 4.0, 10, 30, 1.0, 5.0, 8, 24);
+            compare_tournament_candidate_priority(
+                TournamentCandidatePriority { sharpe: 1.0, drawdown: 4.0, fast: 10, slow: 30 },
+                TournamentCandidatePriority { sharpe: 1.0, drawdown: 5.0, fast: 8, slow: 24 },
+            );
         assert!(lower_drawdown_tie.is_lt());
         let lexicographic_tie =
-            compare_tournament_candidate_priority(1.0, 4.0, 8, 24, 1.0, 4.0, 10, 30);
+            compare_tournament_candidate_priority(
+                TournamentCandidatePriority { sharpe: 1.0, drawdown: 4.0, fast: 8, slow: 24 },
+                TournamentCandidatePriority { sharpe: 1.0, drawdown: 4.0, fast: 10, slow: 30 },
+            );
         assert!(lexicographic_tie.is_lt());
     }
 

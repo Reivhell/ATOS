@@ -149,7 +149,7 @@ fn keyring_entry() -> Result<Entry, String> {
 }
 
 pub fn security_status() -> MemeCoinHunterSecurityStatus {
-    match keyring_entry().and_then(|entry| entry.get_password().map(|token| Zeroizing::new(token)).map_err(|error| {
+    match keyring_entry().and_then(|entry| entry.get_password().map(Zeroizing::new).map_err(|error| {
         if matches!(error, keyring::Error::NoEntry) { "not_configured".to_string() }
         else { "secure_store_unavailable".to_string() }
     })) {
@@ -847,7 +847,7 @@ fn assess_security(
                 }
             }
         };
-    };
+    }
 
     let (mut buy_tax_pct, mut sell_tax_pct, holder_top10_pct, liquidity_locked_top10_pct);
     if chain == "solana" {
@@ -994,7 +994,6 @@ fn assess_security(
         {
             flags.push("Custom transfer hook is configured and requires manual review".into());
             mandatory_known = false;
-            review_required = true;
         }
         holder_top10_pct = percent_from_holder_array(
             data.get("holders"),
@@ -1876,7 +1875,7 @@ pub async fn run_scan(data_dir: PathBuf) -> Result<MemeCoinHunterReport, String>
     if let Some(token) = security_token.as_ref() {
         let addresses_by_chain = pairs_by_token.iter().fold(
             BTreeMap::<String, Vec<String>>::new(),
-            |mut groups, (key, pair)| {
+            |mut groups, (key, _pair)| {
                 let chain = key.split(':').next().unwrap_or_default();
                 let address = discovered
                     .get(key)
@@ -1905,7 +1904,7 @@ pub async fn run_scan(data_dir: PathBuf) -> Result<MemeCoinHunterReport, String>
                     )
                 }
             });
-        for (chain, result) in join_all(security_requests).await {
+        for (_, result) in join_all(security_requests).await {
             match result {
                 Ok((chain, result)) => {
                     security_by_chain.insert(chain, result);
@@ -2395,7 +2394,7 @@ mod tests {
 
     #[test]
     fn solana_scheduled_transfer_fee_is_included_in_the_risk_ceiling() {
-        let mut data = json!({
+        let data = json!({
             "non_transferable":"0", "default_account_state":"1",
             "creator":{"malicious_address":"0"}, "transfer_hook":{"malicious_address":"0"},
             "mintable":{"status":"0"}, "freezable":{"status":"0"}, "closable":{"status":"0"},
@@ -2412,7 +2411,7 @@ mod tests {
 
     #[test]
     fn scheduled_solana_fee_is_still_enforced_when_current_rate_is_missing() {
-        let mut data = json!({
+        let data = json!({
             "non_transferable":"0", "default_account_state":"1",
             "creator":{"malicious_address":"0"}, "transfer_hook":{"malicious_address":"0"},
             "mintable":{"status":"0"}, "freezable":{"status":"0"}, "closable":{"status":"0"},
