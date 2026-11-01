@@ -1215,8 +1215,12 @@ fn open_strict_store(path: &Path) -> Result<Connection, String> {
                     status: status.clone(),
                     decision: decision.clone(),
                     receipt_sha256: receipt.clone(),
-                    assessment_bundle_sha256: bundle.as_deref().map(|value| sha256_bytes(value.as_bytes())),
-                    result_sha256: result.as_deref().map(|value| sha256_bytes(value.as_bytes())),
+                    assessment_bundle_sha256: bundle
+                        .as_deref()
+                        .map(|value| sha256_bytes(value.as_bytes())),
+                    result_sha256: result
+                        .as_deref()
+                        .map(|value| sha256_bytes(value.as_bytes())),
                 })?;
                 append_audit_event_raw(
                     &tx,
