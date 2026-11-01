@@ -80,7 +80,7 @@ for (const executable of ['svelte-check', 'vite', 'tauri']) {
   else checks.push(`installed frontend executable: ${executable}`);
 }
 for (const [command, args] of [
-  ['node', ['--version']], ['npm', ['--version']], ['bun', ['--version']],
+  ['bun', ['--version']],
   ['cargo', ['--version']], ['rustfmt', ['--version']], ['cargo', ['clippy', '--version']],
 ]) {
   if (!commandWorks(command, args)) addFailure(`Required release toolchain command failed: ${command} ${args.join(' ')}`);
@@ -94,7 +94,7 @@ if (!packageJson?.scripts?.['eval:agents'] || !present('scripts/agent-release-ev
   addFailure('Integrated AI Agent release qualification command or tests are missing');
 } else {
   const result = spawnSync(process.execPath, ['scripts/agent-release-evaluation.mjs'], { cwd: root, encoding: 'utf8', timeout: 30_000, windowsHide: true });
-  if (result.error || result.status !== 0) addFailure('AI Agent release qualification gate failed; inspect npm run eval:agents output');
+  if (result.error || result.status !== 0) addFailure('AI Agent release qualification gate failed; inspect bun run eval:agents output');
   else checks.push('AI Agent release qualification gate passed against the application boundary');
 }
 if (!packageJson?.scripts?.['release:evidence'] || !packageJson?.scripts?.['release:evidence:verify']) {
@@ -120,16 +120,16 @@ else {
   // invokes the verifier and preflight; their internal policy tokens belong
   // to their source modules, not to the workflow text itself.
   const workflowContracts = [
-    'npm run release:preflight', 'npm ci --no-audit --fund=false',
+    'bun run release:preflight',
     'bun install --frozen-lockfile', 'bun test api/test/app.integration.test.ts',
-    'npm run build', 'npm test',
+    'bun run build', 'bun run test',
     'cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check',
-    'cargo test --locked', 'cargo clippy --locked', 'npm run tauri build',
-    'npm run release:evidence', 'npm run release:evidence:verify',
+    'cargo test --locked', 'cargo clippy --locked', 'bun run tauri build',
+    'bun run release:evidence', 'bun run release:evidence:verify',
     'node scripts/prepare-release-artifacts.mjs',
     'scripts/verify-release-attestation.mjs', 'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6',
     'anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c', 'sbom-path:', '--signer-workflow',
-    '--source-ref', 'atos-release-staging/**', 'npm run eval:agents',
+    '--source-ref', 'atos-release-staging/**', 'bun run eval:agents',
   ];
   for (const contract of workflowContracts) {
     if (!workflow.includes(contract)) addFailure(`CI does not enforce the release contract: ${contract}`);
