@@ -2826,6 +2826,26 @@ mod tests {
     }
 
     #[test]
+    fn strict_completion_accepts_only_documented_binance_source_label_forms() {
+        for source in [
+            "Binance public REST",
+            "Binance public REST · spot tickers and BTCUSDT 1h candles",
+        ] {
+            let plan = sample_plan();
+            let assessments = assessments_for(&plan);
+            let mut req = request(plan, assessments);
+            req.market_data.source = source.into();
+            let result = evaluate_completion(req).unwrap();
+            assert!(
+                !result.reasons.iter().any(|reason| {
+                    reason.contains("trusted Rust-owned Binance public REST provenance")
+                }),
+                "documented source label rejected: {source}"
+            );
+        }
+    }
+
+    #[test]
     fn registered_evidence_refs_resolve_only_to_the_exact_market_snapshot() {
         let digest = "a".repeat(64);
         let market = StrictMarketDataContext {
