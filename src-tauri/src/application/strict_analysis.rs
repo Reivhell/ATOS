@@ -1934,7 +1934,7 @@ fn canonical_evidence_ref_matches_snapshot(reference: &str, snapshot_sha256: &st
     };
     matches!(
         source,
-        "binance" | "mt5" | "rust-indicator" | "rust-structure" | "backtest" | "fixture"
+        "binance" | "mt5" | "rust-indicator" | "rust-structure" | "backtest"
     ) && valid_token(locator)
         && !locator.contains("..")
 }
@@ -2651,7 +2651,7 @@ mod tests {
                 evidence_refs: if entry.availability == "Catalog only" {
                     Vec::new()
                 } else {
-                    vec![format!("snapshot:{}:fixture:catalog-{}", plan.dataset_sha256, sha256_bytes(entry.id.as_bytes()))]
+                    vec![format!("snapshot:{}:binance:catalog-{}", plan.dataset_sha256, sha256_bytes(entry.id.as_bytes()))]
                 },
                 result: if entry.availability == "Catalog only" {
                     None
@@ -3209,6 +3209,10 @@ mod tests {
         ));
         assert!(!canonical_evidence_ref_matches_snapshot(
             &format!("snapshot:{digest}:agent:assertion"),
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:fixture:catalog-abc"),
             &digest
         ));
         assert!(!canonical_evidence_ref_matches_snapshot(
