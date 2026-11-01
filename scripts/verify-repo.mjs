@@ -192,6 +192,12 @@ requireText(read('src-tauri/src/adapters/tauri/bootstrap.rs'), 'commands::calcul
 requireText(read('src/lib/adapters/tauri/bridge.ts'), "invoke<NativeStructureSnapshot>('calculate_native_market_structure'", 'Typed native market structure bridge');
 requireText(read('src/App.svelte'), 'calculateNativeMarketStructure(series.candles)', 'UI market structure uses Rust results');
 requireText(read('src/App.svelte'), 'nativeStructure.bias', 'UI structure bias is sourced from Rust');
+requireText(nativeIndicators, 'pub fn calculate_signal_snapshot(candles: &[Candle])', 'Rust-native indicator signal generation');
+requireText(read('src-tauri/src/adapters/tauri/commands.rs'), 'calculate_native_indicator_signals', 'Native indicator signal Tauri command');
+requireText(read('src-tauri/src/adapters/tauri/bootstrap.rs'), 'commands::calculate_native_indicator_signals', 'Native indicator signal command registration');
+requireText(read('src/lib/adapters/tauri/bridge.ts'), "invoke<NativeIndicatorSignalSnapshot>('calculate_native_indicator_signals'", 'Typed native indicator signal bridge');
+requireText(read('src/App.svelte'), 'calculateNativeIndicatorSignals(series.candles)', 'UI requests Rust-native indicator signals');
+requireText(read('src/App.svelte'), 'Rust indicator signals:', 'UI labels native indicator signals separately from the decision engine');
 requireText(read('src/App.svelte'), 'calculateTechnicalIndicatorReadings(series.candles)', 'UI indicator cards use Rust results');
 forbidText(read('src/App.svelte'), 'technicalReadings = technicalEnvelope.indicatorReadings', 'Frontend indicator calculation must not be the UI source of truth');
 
