@@ -34,6 +34,6 @@ test('market structure summaries are calculated in Rust and rendered from the na
   assert.match(bootstrap, /commands::calculate_native_market_structure/);
   assert.match(bridge, /invoke<NativeStructureSnapshot>\('calculate_native_market_structure'/);
   assert.match(app, /calculateNativeMarketStructure\(series\.candles\)/);
-  assert.match(app, /nativeStructure\?\.bias/);
-  assert.doesNotMatch(app, /<strong>\{technicalEnvelope\.structure\.bias\}<\/strong>/);
+  assert.match(app, /nativeStructure\.bias/);
+  assert.doesNotMatch(app, /technicalEnvelope\.structure\.bias/);
 });
