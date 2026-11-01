@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createReleaseEvidence, verifyReleaseEvidence, RELEASE_EVIDENCE_SCHEMA } from './release-evidence.mjs';
 
-const COMMIT = 'a'.repeat(40);
+const COMMIT = process.env.GITHUB_SHA?.toLowerCase() || 'a'.repeat(40);
 
 async function makeProject(t, { version = '0.5.6' } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'atos-release-evidence-'));
