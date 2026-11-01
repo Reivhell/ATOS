@@ -60,6 +60,9 @@ test('strict evidence references are snapshot-bound, bounded, and fail closed in
   assert.match(strictRust, /evidence_refs_enforce_count_and_length_limits/);
   assert.match(schema, /"maxItems": 32/);
   assert.match(schema, /"maxLength": 256/);
+  assert.match(schema, /backtest.*A-Za-z0-9_~/);
+  assert.doesNotMatch(schema, /backtest\|fixture/);
+  assert.match(strictRust, /segment\.is_empty\(\) && !segment\.starts_with\('\.'\)/);
 });
 
 test('Rust generates bounded indicator-domain signals through the native application boundary', () => {
