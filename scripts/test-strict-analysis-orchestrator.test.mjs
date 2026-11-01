@@ -147,4 +147,7 @@ test('assessment schema captures strict identity and status-specific evidence re
   assert.ok(schema.required.includes('group'));
   assert.ok(schema.required.includes('agentId'));
   assert.equal(schema.allOf.length, 4);
+  assert.equal(schema.properties.evidenceRefs.maxItems, 32);
+  assert.equal(schema.properties.evidenceRefs.items.maxLength, 256);
+  assert.match(schema.properties.evidenceRefs.items.pattern, /snapshot:/);
 });
