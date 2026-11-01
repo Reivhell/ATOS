@@ -1,4 +1,5 @@
 //! Append-only, account-scoped audit receipts for MT5 risk-sizing decisions.
+#[cfg(not(test))]
 use keyring::Entry;
 use rusqlite::{params, Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const GENESIS_SHA256: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_LEDGER_EVENTS_PER_ACCOUNT: u64 = 1_000_000;
 const MAX_AUDIT_PAYLOAD_BYTES: usize = 256 * 1024;
+#[cfg(not(test))]
 const CHECKPOINT_SERVICE: &str = "dev.agentictrading.os.mt5-risk-ledger";
 const CHECKPOINT_VERSION: u8 = 1;
 
@@ -23,6 +25,7 @@ struct LedgerCheckpoint {
     head_sha256: String,
 }
 
+#[cfg(not(test))]
 fn checkpoint_credential_name(broker_server: &str, account_login: &str) -> String {
     sha256_hex(format!("{broker_server}\\n{account_login}").as_bytes())
 }
@@ -35,6 +38,20 @@ fn checkpoint_matches(
         && checkpoint.event_count == status.event_count
         && is_sha256(&checkpoint.head_sha256)
         && checkpoint.head_sha256 == status.head_sha256
+}
+
+fn compare_checkpoint(status: &Mt5RiskDecisionLedgerStatus, checkpoint: &LedgerCheckpoint) -> Mt5RiskDecisionLedgerStatus {
+    if checkpoint_matches(status, checkpoint) {
+        return status.clone();
+    }
+    invalid_status(
+        &status.broker_server,
+        &status.account_login,
+        status.event_count,
+        status.head_sha256.clone(),
+        checkpoint.event_count.min(status.event_count).saturating_add(1),
+        "Risk-decision ledger head does not match the operating-system checkpoint; refusing to trust or reset history.",
+    )
 }
 
 #[cfg(not(test))]
@@ -86,15 +103,7 @@ fn verify_external_checkpoint(
 ) -> Result<Mt5RiskDecisionLedgerStatus, String> {
     let checkpoint = read_checkpoint(&status.broker_server, &status.account_login)?;
     match checkpoint {
-        Some(checkpoint) if checkpoint_matches(status, &checkpoint) => Ok(status.clone()),
-        Some(checkpoint) => Ok(invalid_status(
-            &status.broker_server,
-            &status.account_login,
-            status.event_count,
-            status.head_sha256.clone(),
-            checkpoint.event_count.min(status.event_count).saturating_add(1),
-            "Risk-decision ledger head does not match the operating-system checkpoint; refusing to trust or reset history.",
-        )),
+        Some(checkpoint) => Ok(compare_checkpoint(status, &checkpoint)),
         None if status.event_count == 0 && status.head_sha256 == GENESIS_SHA256 => {
             let genesis = LedgerCheckpoint {
                 version: CHECKPOINT_VERSION,
@@ -808,6 +817,56 @@ mod tests {
             head_sha256: "a".repeat(64),
         };
         assert!(!checkpoint_matches(&status, &wrong_version));
+    }
+
+    #[test]
+    fn external_checkpoint_rejects_a_deleted_final_event() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        let final_receipt = append(&path, &sample_record("12345", "BLOCKED", 2)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        connection.execute_batch(
+            "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
+             DELETE FROM mt5_risk_decision_events WHERE sequence=2;",
+        ).unwrap();
+        let truncated = verify_chain(&connection, "Broker-Live", "12345").unwrap();
+        assert!(truncated.valid);
+        assert_eq!(truncated.event_count, 1);
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: final_receipt.sequence,
+            head_sha256: final_receipt.event_sha256,
+        };
+        let result = compare_checkpoint(&truncated, &checkpoint);
+        assert!(!result.valid);
+        assert!(result.integrity_error.unwrap().contains("checkpoint"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn external_checkpoint_rejects_a_deleted_multi_event_suffix() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        append(&path, &sample_record("12345", "BLOCKED", 2)).unwrap();
+        append(&path, &sample_record("12345", "BLOCKED", 3)).unwrap();
+        let final_receipt = append(&path, &sample_record("12345", "BLOCKED", 4)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        connection.execute_batch(
+            "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
+             DELETE FROM mt5_risk_decision_events WHERE sequence>=3;",
+        ).unwrap();
+        let truncated = verify_chain(&connection, "Broker-Live", "12345").unwrap();
+        assert!(truncated.valid);
+        assert_eq!(truncated.event_count, 2);
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: final_receipt.sequence,
+            head_sha256: final_receipt.event_sha256,
+        };
+        let result = compare_checkpoint(&truncated, &checkpoint);
+        assert!(!result.valid);
+        assert!(result.integrity_error.unwrap().contains("checkpoint"));
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
