@@ -5,11 +5,12 @@ use crate::{
         strict_analysis, strict_analysis_service,
     },
     domain::{
+        technical_analysis::{self, IndicatorReading},
         market_data_platform::{
             MarketDataProviderCatalogEntry, MarketDataQuery, UnifiedMarketDataResult,
         },
         models::{
-            Agent, AuditEvent, BacktestRequest, BacktestResult, CandleSeriesRequest,
+            Agent, AuditEvent, BacktestRequest, BacktestResult, Candle, CandleSeriesRequest,
             CandleSeriesResponse, DashboardSnapshot, PaperOrder, PlaceOrderRequest, RiskLimits,
         },
     },
@@ -22,6 +23,13 @@ use crate::{
 };
 use chrono::{SecondsFormat, Utc};
 use tauri::{Manager, State};
+
+#[tauri::command]
+pub fn calculate_technical_indicator_readings(
+    candles: Vec<Candle>,
+) -> Result<Vec<IndicatorReading>, String> {
+    technical_analysis::calculate_readings(&candles)
+}
 
 #[tauri::command]
 pub fn get_dashboard_state(core: State<'_, TradingCore>) -> Result<DashboardSnapshot, String> {
