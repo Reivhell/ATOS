@@ -209,6 +209,19 @@ test('assessment timestamp must match the exact snapshot cutoff and evidence ref
 });
 
 
+test('evidence references enforce count and length bounds', () => {
+  const input = validInput();
+  const index = input.assessments.findIndex((entry) => entry.status === 'evaluated');
+  const original = input.assessments[index];
+  input.assessments[index] = { ...original, evidenceRefs: Array.from({ length: 33 }, (_, i) => `snapshot:${'a'.repeat(64)}:fixture:catalog-${i}`) };
+  let result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:${'x'.repeat(257)}`] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+});
+
 test('evidence references must bind to the exact snapshot and use canonical safe locators', () => {
   const input = validInput();
   const index = input.assessments.findIndex((entry) => entry.status === 'evaluated');
