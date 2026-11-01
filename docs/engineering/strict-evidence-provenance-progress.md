@@ -44,3 +44,4 @@ Weighted total: 60.5%, rounded to **61%**.
 - [Evidence resolution against market candles](https://github.com/Reivhell/ATOS/commit/faf89213734dc8ebc70dca1a8dfe162020d1e0fe)
 - [Unresolved-locator regression test](https://github.com/Reivhell/ATOS/commit/fb0a9da19020e28f7897e1d7c9894d726dc9de47)
 - [Static evidence-resolution contract](https://github.com/Reivhell/ATOS/commit/89890a45980e05d0df98b7603486cb6d730267d7)
+- [Completion rejects unresolved evidence locators](https://github.com/Reivhell/ATOS/commit/4fea6d88fa4173f1abe00952b509ab2a33dc673a)
