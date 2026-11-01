@@ -164,25 +164,42 @@ fn sha256_hex(bytes: &[u8]) -> String {
         .collect()
 }
 
-fn event_sha256(
-    broker_server: &str,
-    account_login: &str,
+struct RiskDecisionEventMaterial<'a> {
+    broker_server: &'a str,
+    account_login: &'a str,
     sequence: u64,
-    decision_id: &str,
-    symbol: &str,
-    decision: &str,
+    decision_id: &'a str,
+    symbol: &'a str,
+    decision: &'a str,
     decided_at_ms: i64,
-    request_sha256: &str,
-    result_sha256: &str,
+    request_sha256: &'a str,
+    result_sha256: &'a str,
     snapshot_sequence: u64,
     specification_revision: u64,
-    specification_fingerprint_sha256: &str,
-    previous_sha256: &str,
-) -> String {
-    let material = format!(
+    specification_fingerprint_sha256: &'a str,
+    previous_sha256: &'a str,
+}
+
+fn event_sha256(material: RiskDecisionEventMaterial<'_>) -> String {
+    let RiskDecisionEventMaterial {
+        broker_server,
+        account_login,
+        sequence,
+        decision_id,
+        symbol,
+        decision,
+        decided_at_ms,
+        request_sha256,
+        result_sha256,
+        snapshot_sequence,
+        specification_revision,
+        specification_fingerprint_sha256,
+        previous_sha256,
+    } = material;
+    let canonical = format!(
         "{LEDGER_SCHEMA_VERSION}\n{broker_server}\n{account_login}\n{sequence}\n{decision_id}\n{symbol}\n{decision}\n{decided_at_ms}\n{request_sha256}\n{result_sha256}\n{snapshot_sequence}\n{specification_revision}\n{specification_fingerprint_sha256}\n{previous_sha256}"
     );
-    sha256_hex(material.as_bytes())
+    sha256_hex(canonical.as_bytes())
 }
 
 fn invalid_status(
@@ -353,21 +370,21 @@ fn verify_chain(
                 "Risk-decision payload identity does not match its immutable ledger columns.",
             ));
         }
-        let calculated = event_sha256(
+        let calculated = event_sha256(RiskDecisionEventMaterial {
             broker_server,
             account_login,
-            sequence_u64,
-            &decision_id,
-            &symbol,
-            &decision,
+            sequence: sequence_u64,
+            decision_id: &decision_id,
+            symbol: &symbol,
+            decision: &decision,
             decided_at_ms,
-            &request_hash,
-            &result_hash,
+            request_sha256: &request_hash,
+            result_sha256: &result_hash,
             snapshot_sequence,
             specification_revision,
-            &specification_hash,
-            &previous_hash,
-        );
+            specification_fingerprint_sha256: &specification_hash,
+            previous_sha256: &previous_hash,
+        });
         if calculated != stored_event_hash {
             return Ok(fail(
                 "Risk-decision event hash does not match its canonical event material.",
@@ -402,7 +419,9 @@ fn validate_record(record: &Mt5RiskDecisionRecord) -> Result<(String, String), S
         )
         || record.decided_at_ms <= 0
         || record.snapshot_sequence == 0
+        || i64::try_from(record.snapshot_sequence).is_err()
         || record.specification_revision == 0
+        || i64::try_from(record.specification_revision).is_err()
         || !is_sha256(&record.specification_fingerprint_sha256)
     {
         return Err("Risk-decision ledger record has invalid account, instrument, decision, time, or provenance metadata.".into());
@@ -472,21 +491,21 @@ pub(crate) fn append(
     let decision_id = Uuid::new_v4().to_string();
     let request_sha256 = sha256_hex(request_json.as_bytes());
     let result_sha256 = sha256_hex(result_json.as_bytes());
-    let event_hash = event_sha256(
-        &record.broker_server,
-        &record.account_login,
+    let event_hash = event_sha256(RiskDecisionEventMaterial {
+        broker_server: &record.broker_server,
+        account_login: &record.account_login,
         sequence,
-        &decision_id,
-        &record.symbol,
-        &record.decision,
-        record.decided_at_ms,
-        &request_sha256,
-        &result_sha256,
-        record.snapshot_sequence,
-        record.specification_revision,
-        &record.specification_fingerprint_sha256,
-        &previous_sha256,
-    );
+        decision_id: &decision_id,
+        symbol: &record.symbol,
+        decision: &record.decision,
+        decided_at_ms: record.decided_at_ms,
+        request_sha256: &request_sha256,
+        result_sha256: &result_sha256,
+        snapshot_sequence: record.snapshot_sequence,
+        specification_revision: record.specification_revision,
+        specification_fingerprint_sha256: &record.specification_fingerprint_sha256,
+        previous_sha256: &previous_sha256,
+    });
     transaction
         .execute(
             "INSERT INTO mt5_risk_decision_events
@@ -517,14 +536,23 @@ pub(crate) fn append(
     transaction
         .commit()
         .map_err(|error| format!("Risk-decision event commit failed: {error}"))?;
-    let committed_chain = verify_chain(&connection, &record.broker_server, &record.account_login)?;
-    if !committed_chain.valid
-        || committed_chain.event_count != sequence
-        || committed_chain.head_sha256 != event_hash
+    let committed_event: (String, String, String, String) = connection
+        .query_row(
+            "SELECT request_sha256, result_sha256, previous_sha256, event_sha256
+             FROM mt5_risk_decision_events
+             WHERE broker_server=?1 AND account_login=?2 AND sequence=?3",
+            params![record.broker_server, record.account_login, i64::try_from(sequence)
+                .map_err(|_| "Risk-decision sequence exceeds SQLite integer capacity.".to_string())?],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|error| format!("Committed risk-decision event could not be re-read: {error}"))?;
+    if committed_event.0 != request_sha256
+        || committed_event.1 != result_sha256
+        || committed_event.2 != previous_sha256
+        || committed_event.3 != event_hash
     {
         return Err(
-            "Committed risk-decision receipt did not verify against the durable account chain."
-                .into(),
+            "Committed risk-decision receipt did not match its immutable event record.".into(),
         );
     }
 
