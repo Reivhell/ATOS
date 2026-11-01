@@ -1604,8 +1604,7 @@ fn validate_model_artifact_format(
                 .map_err(|_| "SafeTensors header length is truncated.".to_string())?;
             let header_len = u64::from_le_bytes(length_bytes);
             const MAX_SAFETENSORS_HEADER_BYTES: u64 = 100 * 1024 * 1024;
-            if header_len < 2
-                || header_len > MAX_SAFETENSORS_HEADER_BYTES
+            if !(2..=MAX_SAFETENSORS_HEADER_BYTES).contains(&header_len)
                 || header_len >= file_size - 8
             {
                 return Err("SafeTensors header length is outside its allowed bounds.".into());
@@ -2026,7 +2025,7 @@ pub fn remove_imported_model(
         }
         return Err(error);
     }
-    if let Err(_) = transaction.commit() {
+    if transaction.commit().is_err() {
         if moved_to_quarantine {
             let _ = fs::rename(&quarantine_path, &path);
         }
