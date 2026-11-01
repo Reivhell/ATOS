@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const rustGate = readFileSync(new URL('../src-tauri/src/application/strict_analysis.rs', import.meta.url), 'utf8');
+const commands = readFileSync(new URL('../src-tauri/src/adapters/tauri/commands.rs', import.meta.url), 'utf8');
 const rustLib = [
-  'adapters/tauri/commands.rs', 'adapters/tauri/bootstrap.rs', 'application/strict_analysis_service.rs',
-].map((file) => readFileSync(new URL(`../src-tauri/src/${file}`, import.meta.url), 'utf8')).join('\n');
+  commands,
+  readFileSync(new URL('../src-tauri/src/adapters/tauri/bootstrap.rs', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src-tauri/src/application/strict_analysis_service.rs', import.meta.url), 'utf8'),
+].join('\n');
 const engine = readFileSync(new URL('../src-tauri/src/runtime/trading_core.rs', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('./fixtures/technical-analysis-master-list.v1.json', import.meta.url), 'utf8'));
 const bridge = readFileSync(new URL('../src/lib/adapters/tauri/bridge.ts', import.meta.url), 'utf8');
