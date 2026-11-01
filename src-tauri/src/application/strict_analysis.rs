@@ -681,8 +681,12 @@ fn verify_audit_chain_connection(connection: &Connection) -> Result<(usize, i64,
                     status: status.clone(),
                     decision: decision.clone(),
                     receipt_sha256: receipt.clone(),
-                    assessment_bundle_sha256: bundle.as_deref().map(|value| sha256_bytes(value.as_bytes())),
-                    result_sha256: result.as_deref().map(|value| sha256_bytes(value.as_bytes())),
+                    assessment_bundle_sha256: bundle
+                        .as_deref()
+                        .map(|value| sha256_bytes(value.as_bytes())),
+                    result_sha256: result
+                        .as_deref()
+                        .map(|value| sha256_bytes(value.as_bytes())),
                 })?;
                 if !chain_event_exists(&events, "legacy_orphan_attempt_imported", Some(id), imported_at, &digest) {
                     return Err(format!("Historical attempt {id} lost its plan before audit-chain migration and lacks a matching immutable legacy snapshot."));
