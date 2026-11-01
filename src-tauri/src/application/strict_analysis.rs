@@ -1951,6 +1951,13 @@ fn has_auditable_refs(refs: &[String], snapshot_sha256: &str) -> bool {
         && refs.iter().collect::<BTreeSet<_>>().len() == refs.len()
 }
 
+fn trusted_binance_source_label(source: &str) -> bool {
+    source == "Binance public REST"
+        || source
+            .strip_prefix("Binance public REST · ")
+            .is_some_and(|detail| !detail.trim().is_empty())
+}
+
 fn evidence_ref_resolves_to_market_snapshot(
     reference: &str,
     market: &StrictMarketDataContext,
@@ -1967,7 +1974,7 @@ fn evidence_ref_resolves_to_market_snapshot(
     if source != "binance"
         || !valid_sha256(snapshot_digest)
         || !snapshot_digest.eq_ignore_ascii_case(&market.dataset_sha256)
-        || !(market.source == "Binance public REST" || market.source.starts_with("Binance public REST · "))
+        || !(trusted_binance_source_label(&market.source))
     {
         return false;
     }
@@ -2515,7 +2522,7 @@ where
     if !market.validated {
         reasons.push("Market data has not passed the validated-data contract.".into());
     }
-    if !(market.source == "Binance public REST" || market.source.starts_with("Binance public REST · ")) {
+    if !(trusted_binance_source_label(&market.source)) {
         reasons.push("Strict completion requires trusted Rust-owned Binance public REST provenance.".into());
     }
     if !valid_timestamp(&market.as_of) {
@@ -2823,6 +2830,17 @@ mod tests {
         let mut tampered = plan.clone();
         tampered.as_of = "2026-10-27T09:00:00.000Z".into();
         assert!(!work_plan_is_unmodified_and_unexpired(&tampered).unwrap());
+    }
+
+    #[test]
+    fn trusted_binance_source_label_rejects_empty_or_whitespace_detail_suffixes() {
+        assert!(trusted_binance_source_label("Binance public REST"));
+        assert!(trusted_binance_source_label(
+            "Binance public REST · spot tickers and BTCUSDT 1h candles"
+        ));
+        assert!(!trusted_binance_source_label("Binance public REST · "));
+        assert!(!trusted_binance_source_label("Binance public REST ·    "));
+        assert!(!trusted_binance_source_label("Binance public REST spoof"));
     }
 
     #[test]
