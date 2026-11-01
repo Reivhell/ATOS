@@ -273,8 +273,6 @@
         chartSeriesResponse = null;
         technicalReadings = [];
         nativeStructure = null;
-    nativeIndicatorSignals = null;
-      nativeIndicatorSignals = null;
         nativeIndicatorSignals = null;
         chartSeriesError = 'No validated candle series is currently available. Refresh market data or inspect provider status.';
       }
