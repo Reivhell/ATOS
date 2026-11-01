@@ -1,3 +1,17 @@
+export interface NativeIndicatorSignal {
+  domain: 'trend' | 'momentum' | 'location' | 'structure';
+  direction: 'bullish' | 'bearish' | 'neutral';
+  signalStrength: number;
+  evidenceRefs: string[];
+}
+
+export interface NativeIndicatorSignalSnapshot {
+  contractVersion: string;
+  candleCount: number;
+  metrics: Record<string, number | null>;
+  signals: NativeIndicatorSignal[];
+}
+
 export interface NativeStructurePivot {
   kind: string;
   classification: string;
