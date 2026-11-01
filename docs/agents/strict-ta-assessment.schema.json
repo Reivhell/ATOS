@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentic-trading-os.invalid/schemas/strict-ta-assessment.v1.json",
   "title": "Strict Trading Analysis Assessment",
-  "description": "One specialist assessment for one exact code-owned master-list entry. Runtime enforcement is provided by src/lib/decision-gate.js.",
+  "description": "One specialist assessment for one exact code-owned master-list entry. Runtime parity enforcement is provided by src/lib/engines/decision/strict-decision-gate.js; the authoritative completion gate is in Rust.",
   "type": "object",
   "additionalProperties": false,
   "required": [
