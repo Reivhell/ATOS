@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::models::Candle;
+use crate::domain::{
+    models::Candle,
+    research_smc::{self, ClassifiedSwing, StructureBreak},
+};
 
 const MAX_CANDLES: usize = 10_000;
 
@@ -12,6 +15,72 @@ pub struct IndicatorReading {
     pub value: String,
     pub detail: String,
     pub available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeStructurePivot {
+    pub kind: String,
+    pub classification: String,
+    pub pivot_index: usize,
+    pub confirmed_at_index: usize,
+    pub pivot_at_ms: i64,
+    pub confirmed_at_ms: i64,
+    pub price: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeStructureBreak {
+    pub direction: String,
+    pub classification: String,
+    pub level_kind: String,
+    pub level: f64,
+    pub pivot_index: usize,
+    pub level_confirmed_at_index: usize,
+    pub broken_at_index: usize,
+    pub broken_at_ms: i64,
+    pub close: f64,
+    pub prior_bias: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeStructureSnapshot {
+    pub pivots: Vec<NativeStructurePivot>,
+    pub breaks: Vec<NativeStructureBreak>,
+    pub bias: String,
+}
+
+impl From<ClassifiedSwing> for NativeStructurePivot {
+    fn from(swing: ClassifiedSwing) -> Self {
+        Self {
+            kind: swing.kind.into(),
+            classification: swing.classification.into(),
+            pivot_index: swing.pivot_index,
+            confirmed_at_index: swing.confirmed_at_index,
+            pivot_at_ms: swing.pivot_at_ms,
+            confirmed_at_ms: swing.confirmed_at_ms,
+            price: swing.price,
+        }
+    }
+}
+
+impl From<StructureBreak> for NativeStructureBreak {
+    fn from(event: StructureBreak) -> Self {
+        Self {
+            direction: event.direction.into(),
+            classification: event.classification.into(),
+            level_kind: event.level_kind.into(),
+            level: event.level,
+            pivot_index: event.pivot_index,
+            level_confirmed_at_index: event.level_confirmed_at_index,
+            broken_at_index: event.broken_at_index,
+            broken_at_ms: event.broken_at_ms,
+            close: event.close,
+            prior_bias: event.prior_bias.into(),
+        }
+    }
 }
 
 fn format_value(value: f64, digits: usize) -> String {
@@ -234,6 +303,26 @@ pub fn calculate_readings(candles: &[Candle]) -> Result<Vec<IndicatorReading>, S
     ])
 }
 
+pub fn calculate_structure(candles: &[Candle]) -> Result<NativeStructureSnapshot, String> {
+    if candles.len() > MAX_CANDLES {
+        return Err(format!("Structure input exceeds the {MAX_CANDLES}-candle safety limit."));
+    }
+    let pivots = research_smc::classify_confirmed_swings(candles, 2, 2)?
+        .into_iter()
+        .map(NativeStructurePivot::from)
+        .collect::<Vec<_>>();
+    let breaks = research_smc::detect_confirmed_structure_breaks(candles, 2, 2)?
+        .into_iter()
+        .map(NativeStructureBreak::from)
+        .collect::<Vec<_>>();
+    let bias = breaks.last().map(|event| event.direction.clone()).unwrap_or_else(|| "unknown".into());
+    Ok(NativeStructureSnapshot {
+        pivots: pivots.into_iter().rev().take(40).collect::<Vec<_>>().into_iter().rev().collect(),
+        breaks: breaks.into_iter().rev().take(40).collect::<Vec<_>>().into_iter().rev().collect(),
+        bias,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,5 +385,13 @@ mod tests {
     #[test]
     fn excessive_input_is_rejected() {
         assert!(calculate_readings(&candles(MAX_CANDLES + 1)).is_err());
+    }
+
+    #[test]
+    fn native_structure_is_causal_and_bounded() {
+        let rows = candles(100);
+        let result = calculate_structure(&rows).unwrap();
+        assert!(result.pivots.len() <= 40);
+        assert!(result.breaks.len() <= 40);
     }
 }
