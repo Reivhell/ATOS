@@ -217,7 +217,7 @@ export function evaluateStrictDecisionGate(input) {
   }
 
   if (marketData?.validated !== true) reasons.push('Market data has not passed the validated-data contract.');
-  if (typeof marketData?.source !== 'string' || !marketData.source.startsWith('Binance public REST')) reasons.push('Strict completion requires trusted Rust-owned Binance public REST provenance.');
+  if (typeof marketData?.source !== 'string' || !(marketData.source === 'Binance public REST' || marketData.source.startsWith('Binance public REST · '))) reasons.push('Strict completion requires trusted Rust-owned Binance public REST provenance.');
   if (!validTimestamp(marketData?.asOf)) reasons.push('Market-data timestamp is missing or invalid.');
   if (!validSha256(marketData?.datasetSha256)) reasons.push('Market-data SHA-256 snapshot fingerprint is missing or invalid.');
   if (!nonEmptyString(marketData?.symbol)) reasons.push('Market-data symbol/instrument scope is missing.');
