@@ -1951,6 +1951,53 @@ fn has_auditable_refs(refs: &[String], snapshot_sha256: &str) -> bool {
         && refs.iter().collect::<BTreeSet<_>>().len() == refs.len()
 }
 
+fn evidence_ref_resolves_to_market_snapshot(
+    reference: &str,
+    market: &StrictMarketDataContext,
+) -> bool {
+    let Some(rest) = reference.strip_prefix("snapshot:") else {
+        return false;
+    };
+    let Some((snapshot_digest, source_and_locator)) = rest.split_once(':') else {
+        return false;
+    };
+    let Some((source, locator)) = source_and_locator.split_once(':') else {
+        return false;
+    };
+    if source != "binance"
+        || !valid_sha256(snapshot_digest)
+        || !snapshot_digest.eq_ignore_ascii_case(&market.dataset_sha256)
+        || !market.source.starts_with("Binance public REST")
+    {
+        return false;
+    }
+    let mut segments = locator.split('/');
+    let (Some(symbol), Some(timeframe), Some(timestamp), None) =
+        (segments.next(), segments.next(), segments.next(), segments.next())
+    else {
+        return false;
+    };
+    if !symbol.eq_ignore_ascii_case(&market.symbol) || timeframe != market.timeframe {
+        return false;
+    }
+    let Ok(timestamp) = timestamp.parse::<i64>() else {
+        return false;
+    };
+    market.candles.iter().any(|candle| candle.time == timestamp)
+}
+
+fn has_registered_evidence_refs(refs: &[String], market: &StrictMarketDataContext) -> bool {
+    !refs.is_empty()
+        && refs.len() <= MAX_EVIDENCE_REFS_PER_ASSESSMENT
+        && refs.iter().all(|item| {
+            item.len() <= MAX_EVIDENCE_REF_LENGTH
+                && item.trim() == item
+                && canonical_evidence_ref_matches_snapshot(item, &market.dataset_sha256)
+                && evidence_ref_resolves_to_market_snapshot(item, market)
+        })
+        && refs.iter().collect::<BTreeSet<_>>().len() == refs.len()
+}
+
 fn sha256_serializable<T: Serialize>(value: &T) -> Result<String, String> {
     let bytes = serde_json::to_vec(value)
         .map_err(|error| format!("Cannot serialize strict audit material: {error}"))?;
@@ -2367,7 +2414,7 @@ where
                     .entry(trusted.category.clone())
                     .or_default()
                     .evaluated += 1;
-                if !has_auditable_refs(&assessment.evidence_refs, &market.dataset_sha256) {
+                if !has_registered_evidence_refs(&assessment.evidence_refs, &market) {
                     reasons.push(format!(
                         "Evaluated concept lacks evidence references: {}.",
                         trusted.id
@@ -2652,7 +2699,7 @@ mod tests {
                 evidence_refs: if entry.availability == "Catalog only" {
                     Vec::new()
                 } else {
-                    vec![format!("snapshot:{}:binance:catalog-{}", plan.dataset_sha256, sha256_bytes(entry.id.as_bytes()))]
+                    vec![format!("snapshot:{}:binance:{}/{}/{}", plan.dataset_sha256, plan.symbol, plan.timeframe, 1_700_000_000_000_i64)]
                 },
                 result: if entry.availability == "Catalog only" {
                     None
