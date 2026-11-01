@@ -38,6 +38,10 @@ const MAX_PENDING_ORDERS: usize = 200;
 const ORDER_STATE_STARTED: i64 = 0;
 const ORDER_STATE_PLACED: i64 = 1;
 const ORDER_STATE_PARTIAL: i64 = 3;
+const ORDER_STATE_CANCELED: i64 = 2;
+const ORDER_STATE_FILLED: i64 = 4;
+const ORDER_STATE_REJECTED: i64 = 5;
+const ORDER_STATE_EXPIRED: i64 = 6;
 const ORDER_STATE_REQUEST_ADD: i64 = 7;
 const ORDER_STATE_REQUEST_MODIFY: i64 = 8;
 const ORDER_STATE_REQUEST_CANCEL: i64 = 9;
@@ -1498,6 +1502,16 @@ fn validate_snapshot(snapshot: &Mt5Snapshot) -> Result<(), String> {
 }
 
 fn is_active_pending_order_state(state: i64) -> bool {
+    if [
+        ORDER_STATE_CANCELED,
+        ORDER_STATE_FILLED,
+        ORDER_STATE_REJECTED,
+        ORDER_STATE_EXPIRED,
+    ]
+    .contains(&state)
+    {
+        return false;
+    }
     matches!(
         state,
         ORDER_STATE_STARTED
