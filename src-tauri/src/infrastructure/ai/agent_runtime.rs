@@ -351,7 +351,7 @@ pub fn save_provider_key(
     if provider == "ollama" {
         return Err("Local Ollama does not accept an API key in this runtime.".into());
     }
-    let mut secret = Zeroizing::new(api_key);
+    let secret = Zeroizing::new(api_key);
     if secret.len() < 16
         || secret.len() > 4096
         || secret.trim() != secret.as_str()
