@@ -73,7 +73,7 @@ export async function getMt5RiskDecisionLedgerStatus(
   brokerServer: string,
   accountLogin: string
 ): Promise<Mt5RiskDecisionLedgerStatus> {
-  requireDesktopRuntime('MT5 risk-decision ledger');
+  requireDesktopRuntime('MT5 bridge');
   if (typeof brokerServer !== 'string' || brokerServer.trim().length === 0 || brokerServer.length > 128
     || typeof accountLogin !== 'string' || accountLogin.trim().length === 0 || accountLogin.length > 32) {
     throw new TypeError('A valid authenticated broker and account identity is required.');
