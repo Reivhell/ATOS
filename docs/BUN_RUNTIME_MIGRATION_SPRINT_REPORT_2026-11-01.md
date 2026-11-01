@@ -4,17 +4,17 @@
 **Repository:** `Reivhell/ATOS`  
 **Base branch:** `main`  
 **Working branch:** `migration/bun-runtime-primary`  
-**Sprint completion:** **35%**  
-**Status:** Assessment complete; implementation remains pending.
+**Sprint completion:** **60%**  
+**Status:** Runtime command migration and CI/release wiring updated; CI verification pending.
 
 ## Current state verified on `main`
 
 - The optional local research API already uses Bun and Hono. The package scripts include `dev:api` and `start:api` with Bun.
 - A `bun.lock` lockfile is present.
 - CI has a dedicated Bun compatibility job that installs from the frozen Bun lockfile, runs repository guardrails, runs the MJS test suite, and executes the Hono integration tests.
-- The primary repository guardrails and full source test suite still run through Node/npm.
-- The frontend build and tagged-release pipeline still use npm commands. The release workflow also requires `package-lock.json` and `bun.lock`.
-- The release preflight still explicitly checks Node and npm availability, alongside Bun and native toolchains.
+- The primary repository guardrails and full source test suite now use Bun scripts and Bun's test runner.
+- Frontend build, Tauri dev/build commands, release evidence, installer staging, and attestation verification now invoke scripts through Bun. Both lockfiles remain required as a conservative transition safeguard.
+- Release preflight now checks Bun and native toolchains, not Node/npm availability.
 - The existing validation report says Bun/Hono runtime integration and native/release acceptance were not executed in the audited environment. CI configuration is not evidence that those checks have passed.
 
 ## Sprint scope
@@ -41,8 +41,9 @@
 - Repository located and inspected: `Reivhell/ATOS`, default branch `main`.
 - Existing package scripts, CI workflow, release preflight, Bun lockfile, and latest validation report reviewed.
 - Created working branch `migration/bun-runtime-primary`.
-- No runtime source, package manifest, workflow, or release-policy code has been changed in this sprint step. The migration is not complete and no test pass is claimed.
+- Updated package scripts, CI and tagged-release workflow commands, Tauri hooks, release preflight policy, and related repository contracts to use Bun.
+- No application business logic was changed. Bun is not installed in the editing environment, so local test execution was unavailable; CI must validate the migration before it is treated as complete.
 
 ## Next implementation step
 
-Update the repository's runtime command policy and associated contract tests together, then change CI and release workflows in the same branch. Do not remove the npm lockfile requirement or the Node checks until the complete release path has been migrated and verified.
+Run CI against the updated Bun-first workflow, resolve any Bun-specific test or build failures, and retain the npm lockfile until the Bun-only release path is verified.
