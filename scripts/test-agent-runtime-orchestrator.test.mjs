@@ -147,7 +147,6 @@ test('duplicate domains, wrong aliases, malformed payload binding and execution 
     report.evidenceBundle[3].payload.domain = 'trend';
     report.evidenceBundle[3].payloadCanonicalJson = canonicalPayloadText(report.evidenceBundle[3].payload);
     report.evidenceBundle[3].payloadSha256 = await hashText(report.evidenceBundle[3].payloadCanonicalJson);
-    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
     await assert.rejects(() => evaluateAgentResearchReport(report), /duplicate or unregistered domain/);
   });
   await t.test('wrong native alias', async () => {
@@ -230,7 +229,6 @@ test('commentary is bounded and domain references cannot be cross-wired', async 
     report.marketContext.asOf = new Date(report.marketContext.latestClosedBarAtMs).toISOString();
     report.marketContext.retrievedAtMs = Date.now();
     for (const item of report.evidenceBundle) item.observedAt = report.marketContext.asOf;
-    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
     const result = await evaluateAgentResearchReport(report);
     assert.equal(result.decision.decision, 'BLOCK');
   });
@@ -240,7 +238,6 @@ test('commentary is bounded and domain references cannot be cross-wired', async 
     report.marketContext.latestClosedBarAtMs = report.marketContext.retrievedAtMs - 100;
     report.marketContext.asOf = new Date(report.marketContext.latestClosedBarAtMs).toISOString();
     for (const item of report.evidenceBundle) item.observedAt = report.marketContext.asOf;
-    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
     const result = await evaluateAgentResearchReport(report);
     assert.equal(result.decision.decision, 'BLOCK');
   });
