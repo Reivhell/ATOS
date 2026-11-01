@@ -150,4 +150,12 @@ test('assessment schema captures strict identity and status-specific evidence re
   assert.equal(schema.properties.evidenceRefs.maxItems, 32);
   assert.equal(schema.properties.evidenceRefs.items.maxLength, 256);
   assert.match(schema.properties.evidenceRefs.items.pattern, /snapshot:/);
+  const evidencePattern = new RegExp(schema.properties.evidenceRefs.items.pattern);
+  for (const locator of ['BTCUSDT/1h', 'candle-1', 'snapshot-record']) {
+    assert.equal(evidencePattern.test(`snapshot:${'a'.repeat(64)}:binance:${locator}`), true);
+  }
+  for (const locator of ['', '.', '..', 'BTCUSDT/', 'BTCUSDT//1h', 'BTCUSDT/./1h', 'BTCUSDT/.private/1h', 'BTCUSDT/../1h']) {
+    assert.equal(evidencePattern.test(`snapshot:${'a'.repeat(64)}:binance:${locator}`), false, `unsafe schema locator accepted: ${locator}`);
+  }
+  assert.equal(evidencePattern.test(`snapshot:${'a'.repeat(64)}:fixture:catalog-1`), false);
 });
