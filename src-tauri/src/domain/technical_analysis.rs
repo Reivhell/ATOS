@@ -139,7 +139,14 @@ pub fn calculate_readings(candles: &[Candle]) -> Result<Vec<IndicatorReading>, S
     if candles.len() > MAX_CANDLES {
         return Err(format!("Indicator input exceeds the {MAX_CANDLES}-candle safety limit."));
     }
+    let mut previous_time = None;
     for (index, candle) in candles.iter().enumerate() {
+        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
+            return Ok(unavailable_readings(candles.len(), &format!(
+                "Candle {} timestamp must be positive and strictly increasing.", index + 1
+            )));
+        }
+        previous_time = Some(candle.time);
         if ![candle.open, candle.high, candle.low, candle.close, candle.volume]
             .iter()
             .all(|value| value.is_finite())
@@ -177,6 +184,15 @@ pub fn calculate_readings(candles: &[Candle]) -> Result<Vec<IndicatorReading>, S
     };
     let bands = bollinger(&closes, 20);
     let count = candles.len();
+    let finite_scalars = [sma9, sma21, ema20, rsi14, atr14]
+        .into_iter()
+        .flatten()
+        .all(f64::is_finite);
+    let finite_macd = macd.is_none_or(|values| values.0.is_finite() && values.1.is_finite() && values.2.is_finite());
+    let finite_bands = bands.is_none_or(|values| values.0.is_finite() && values.1.is_finite() && values.2.is_finite());
+    if !finite_scalars || !finite_macd || !finite_bands {
+        return Ok(unavailable_readings(count, "Indicator arithmetic exceeded the supported numeric range."));
+    }
 
     Ok(vec![
         IndicatorReading {
