@@ -51,7 +51,7 @@ test('strict evidence references are snapshot-bound, bounded, and fail closed in
   const schema = read('../docs/agents/strict-ta-assessment.schema.json');
   assert.match(strictGate, /function canonicalEvidenceRefMatchesSnapshot/);
   assert.match(strictGate, /binance\\|mt5\\|rust-indicator\\|rust-structure\\|backtest/);
-  assert.doesNotMatch(strictGate, /backtest\\|fixture/);
+  assert.doesNotMatch(strictGate, /backtest\|fixture/);
   assert.match(strictGate, /refs\.length <= 32/);
   assert.match(strictGate, /ref\.length <= 256/);
   assert.match(strictRust, /fn canonical_evidence_ref_matches_snapshot/);
