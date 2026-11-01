@@ -149,7 +149,7 @@ fn keyring_entry() -> Result<Entry, String> {
 }
 
 pub fn security_status() -> MemeCoinHunterSecurityStatus {
-    match keyring_entry().and_then(|entry| entry.get_password().map(|token| Zeroizing::new(token)).map_err(|error| {
+    match keyring_entry().and_then(|entry| entry.get_password().map(Zeroizing::new).map_err(|error| {
         if matches!(error, keyring::Error::NoEntry) { "not_configured".to_string() }
         else { "secure_store_unavailable".to_string() }
     })) {
@@ -847,7 +847,7 @@ fn assess_security(
                 }
             }
         };
-    };
+    }
 
     let (mut buy_tax_pct, mut sell_tax_pct, holder_top10_pct, liquidity_locked_top10_pct);
     if chain == "solana" {
@@ -2395,7 +2395,7 @@ mod tests {
 
     #[test]
     fn solana_scheduled_transfer_fee_is_included_in_the_risk_ceiling() {
-        let mut data = json!({
+        let data = json!({
             "non_transferable":"0", "default_account_state":"1",
             "creator":{"malicious_address":"0"}, "transfer_hook":{"malicious_address":"0"},
             "mintable":{"status":"0"}, "freezable":{"status":"0"}, "closable":{"status":"0"},
@@ -2412,7 +2412,7 @@ mod tests {
 
     #[test]
     fn scheduled_solana_fee_is_still_enforced_when_current_rate_is_missing() {
-        let mut data = json!({
+        let data = json!({
             "non_transferable":"0", "default_account_state":"1",
             "creator":{"malicious_address":"0"}, "transfer_hook":{"malicious_address":"0"},
             "mintable":{"status":"0"}, "freezable":{"status":"0"}, "closable":{"status":"0"},
