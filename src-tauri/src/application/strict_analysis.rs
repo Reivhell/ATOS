@@ -2651,7 +2651,7 @@ mod tests {
                 evidence_refs: if entry.availability == "Catalog only" {
                     Vec::new()
                 } else {
-                    vec![format!("snapshot:{}:test:catalog-{}", plan.dataset_sha256, sha256_bytes(entry.id.as_bytes()))]
+                    vec![format!("snapshot:{}:fixture:catalog-{}", plan.dataset_sha256, sha256_bytes(entry.id.as_bytes()))]
                 },
                 result: if entry.availability == "Catalog only" {
                     None
