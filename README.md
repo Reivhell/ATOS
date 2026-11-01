@@ -304,7 +304,7 @@ These are dated repository records, not a live acceptance certificate. MetaEdito
 - **Missing evidence is not low risk.** Unprotected or unresolved MT5 exposure blocks additional risk; unknown screener contract/holder/liquidity evidence must not be interpreted as safe.
 - **Backtests are models.** Results depend on dataset quality, assumptions, costs, and execution simplifications. They are not forecasts or proof of profitability.
 - **AI output is untrusted.** Models cannot override deterministic risk policy or acquire order authority.
-- **Local bridge only.** The MT5 bridge is unauthenticated for remote use by design and its loopback transport is not encrypted; do not expose or tunnel it.
+- **Local bridge only.** The MT5 bridge supports a paired terminal on the same machine only; its loopback transport is not encrypted in transit. Do not expose or tunnel it.
 - **Not production-certified.** Native release qualification, MetaEditor compilation, terminal/broker acceptance, and platform-specific operational testing must be completed before production approval.
 
 </details>
