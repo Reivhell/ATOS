@@ -78,17 +78,17 @@ if (packageJson) {
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'vite build', 'Frontend build script');
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'typecheck:layers', 'Strict analysis-layer typecheck script');
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'verify-repo.mjs', 'Repository guardrail script');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-exports.test.mjs', 'Dependency-free export tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-dataset-fingerprint.test.mjs', 'Dependency-free provenance contract tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-technical-analysis.test.mjs', 'Dependency-free technical analysis tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-dashboard-model.test.mjs', 'Dependency-free dashboard view-model tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-release-evidence.test.mjs', 'Release artifact provenance and integrity tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node scripts/release-evidence.mjs create', 'Release evidence generator command');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node scripts/release-evidence.mjs verify', 'Release evidence verification command');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-market-data-model.test.mjs', 'Dependency-free typed market-data contract tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-candle-series-audit.test.mjs', 'Bounded candle timeline and latest-bar anomaly audit tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-candle-continuity-contract.test.mjs', 'Native candle-continuity source contract tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-backtest-robustness.test.mjs', 'Backtest stress and out-of-sample source contract tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-exports.test.mjs', 'Dependency-free export tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-dataset-fingerprint.test.mjs', 'Dependency-free provenance contract tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-technical-analysis.test.mjs', 'Dependency-free technical analysis tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-dashboard-model.test.mjs', 'Dependency-free dashboard view-model tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-release-evidence.test.mjs', 'Release artifact provenance and integrity tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun run scripts/release-evidence.mjs create', 'Release evidence generator command');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun run scripts/release-evidence.mjs verify', 'Release evidence verification command');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-market-data-model.test.mjs', 'Dependency-free typed market-data contract tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-candle-series-audit.test.mjs', 'Bounded candle timeline and latest-bar anomaly audit tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-candle-continuity-contract.test.mjs', 'Native candle-continuity source contract tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-backtest-robustness.test.mjs', 'Backtest stress and out-of-sample source contract tests');
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/*.test.mjs', 'Bun runtime test suite');
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun --hot run api/src/server.ts', 'Bun/Hono local research API development command');
   requireText(JSON.stringify(packageJson.dependencies ?? {}), 'hono', 'Hono HTTP adapter dependency');
@@ -96,11 +96,11 @@ if (packageJson) {
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'test-rate-limit.test.mjs', 'Sliding-window rate limiter regression tests');
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'test-request-rate-policy.test.mjs', 'Separate authenticated and failed-authentication quota tests');
   requireText(JSON.stringify(packageJson.scripts ?? {}), 'test-request-context-policy.test.mjs', 'Loopback Host/origin request-context policy regression tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-decision-gate.test.mjs', 'Strict decision gate tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-strict-analysis-orchestrator.test.mjs', 'Strict orchestrator completion-barrier tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-technical-analysis-service.test.mjs', 'Technical-analysis application boundary tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-analysis-engine.test.mjs', 'Layered technical-analysis engine tests');
-  requireText(JSON.stringify(packageJson.scripts ?? {}), 'node --test scripts/test-research-decision-engine.test.mjs', 'Fail-closed research decision tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-decision-gate.test.mjs', 'Strict decision gate tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-strict-analysis-orchestrator.test.mjs', 'Strict orchestrator completion-barrier tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-technical-analysis-service.test.mjs', 'Technical-analysis application boundary tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-analysis-engine.test.mjs', 'Layered technical-analysis engine tests');
+  requireText(JSON.stringify(packageJson.scripts ?? {}), 'bun test scripts/test-research-decision-engine.test.mjs', 'Fail-closed research decision tests');
 }
 
 if (packageJson && tauriConfig) {
@@ -373,20 +373,20 @@ requireText(security, 'No account/order, withdrawal, wallet-signing, or private 
 requireText(security, 'The Svelte frontend is not a security boundary.', 'Security boundary documentation');
 requireText(workflow, 'tagged-release-build:', 'Tagged release build gate');
 requireText(read('scripts/release-version-policy.mjs'), 'Release tag v${tagVersion} does not match application manifest version ${applicationVersion}.', 'Release tag/version identity contract');
-requireText(workflow, 'npm run release:preflight', 'Fail-closed release readiness preflight');
+requireText(workflow, 'bun run release:preflight', 'Fail-closed release readiness preflight');
 requireText(workflow, 'cancel-in-progress:', 'Stale non-release CI cancellation');
 requireText(workflow, 'timeout-minutes:', 'CI job runtime bounds');
 requireText(read('docs/REQUEST_RATE_ISOLATION_0.8.3.md'), 'failed-authentication pressure', 'Separate authentication failure budget documentation');
-requireText(workflow, 'npm test', 'Canonical full Node test suite in release CI');
+requireText(workflow, 'bun run test', 'Canonical Bun test suite in release CI');
 requireText(read('scripts/check-release-readiness.mjs'), 'Cargo.lock root package version', 'Cargo lock manifest alignment check');
 requireText(read('scripts/check-release-readiness.mjs'), "'bun.lock'", 'Bun/Hono lockfile release gate');
 requireText(read('scripts/check-release-readiness.mjs'), "['bun', ['--version']]", 'Bun runtime release toolchain gate');
 requireText(read('scripts/check-release-readiness.mjs'), 'bun install --frozen-lockfile', 'Pinned Bun install release gate');
-requireText(read('scripts/check-release-readiness.mjs'), 'package-lock.json root package identity/version', 'npm lock manifest alignment check');
+requireText(read('scripts/check-release-readiness.mjs'), 'package-lock.json root package identity/version', 'npm lock manifest alignment check (compatibility lock)');
 const guardrailJob = workflow.split('  repository-guardrails:')[1]?.split('\n  bun-compatibility:')[0] ?? '';
-requireText(guardrailJob, 'npm test', 'Repository CI runs the entire source test suite');
-requireText(workflow, 'npm run release:evidence', 'CI release provenance manifest generation');
-requireText(workflow, 'npm run release:evidence:verify', 'CI release artifact manifest verification');
+requireText(guardrailJob, 'bun run test', 'Repository CI runs the entire source test suite');
+requireText(workflow, 'bun run release:evidence', 'CI release provenance manifest generation');
+requireText(workflow, 'bun run release:evidence:verify', 'CI release artifact manifest verification');
 requireText(workflow, 'atos-release-staging/**', 'CI uploads the exact staged installer payload and release evidence');
 requireText(workflow, 'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6', 'Pinned signed Sigstore release provenance attestation');
 requireText(workflow, 'anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c', 'Pinned release SPDX SBOM generation');
@@ -396,7 +396,7 @@ requireText(workflow, 'cargo test --manifest-path src-tauri/Cargo.toml --all-tar
 requireText(workflow, 'test -f package-lock.json', 'Release npm lockfile gate');
 requireText(workflow, 'test -f bun.lock', 'Release Bun lockfile gate');
 requireText(workflow, 'test -f src-tauri/Cargo.lock', 'Release Cargo lockfile gate');
-requireText(workflow, 'npm ci --no-audit --fund=false', 'Locked npm install for release builds');
+requireText(workflow, 'bun install --frozen-lockfile', 'Locked npm install for release builds');
 requireText(workflow, 'cargo test --locked', 'Locked Cargo test for release builds');
 
 const marketDataModel = read('src/lib/domain/market-data/market-data-model.js');
