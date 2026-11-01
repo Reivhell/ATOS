@@ -3444,6 +3444,13 @@ mod tests {
         assert!(evidence_ref_resolves_to_market_snapshot(&reference, market));
         assert!(has_registered_evidence_refs(std::slice::from_ref(&reference), market));
 
+        let mut ambiguous_market = market.clone();
+        ambiguous_market.candles.push(ambiguous_market.candles[0].clone());
+        assert!(
+            !evidence_ref_resolves_to_market_snapshot(&reference, &ambiguous_market),
+            "duplicate candle timestamps must not resolve to an ambiguous evidence locator"
+        );
+
         let invalid = [
             format!("snapshot:{}:rust-indicator:{}/{}/{}", market.dataset_sha256, market.symbol, market.timeframe, market.candles[0].time),
             format!("snapshot:{}:binance:ETH-USD/{}/{}", market.dataset_sha256, market.timeframe, market.candles[0].time),
