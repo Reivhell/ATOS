@@ -13,7 +13,7 @@ test('release readiness validates each invariant in the source module that owns 
   const verifier = read('scripts/verify-release-attestation.mjs');
   const versionPolicy = read('scripts/release-version-policy.mjs');
 
-  assert.match(workflow, /node scripts\/verify-release-attestation\.mjs/);
+  assert.match(workflow, /bun run scripts\/verify-release-attestation\.mjs/);
   assert.match(readiness, /read\('scripts\/verify-release-attestation\.mjs'\)/);
   assert.match(verifier, /'--deny-self-hosted-runners'/);
   assert.match(verifier, /https:\/\/slsa\.dev\/provenance\/v1/);
@@ -26,7 +26,7 @@ test('release readiness validates each invariant in the source module that owns 
 });
 
 test('release preflight does not misreport source-owned policy tokens as missing workflow contracts', () => {
-  const result = spawnSync(process.execPath, ['scripts/check-release-readiness.mjs'], {
+  const result = spawnSync('bun', ['run', 'scripts/check-release-readiness.mjs'], {
     cwd: ROOT,
     encoding: 'utf8',
     timeout: 45_000,
