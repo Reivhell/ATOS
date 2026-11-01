@@ -270,6 +270,30 @@ mod tests {
     }
 
     #[test]
+    fn out_of_order_timestamps_fail_closed() {
+        let mut rows = candles(40);
+        rows[20].time = rows[19].time;
+        let result = calculate_readings(&rows).unwrap();
+        assert!(result.iter().all(|reading| !reading.available));
+        assert!(result[0].detail.contains("strictly increasing"));
+    }
+
+    #[test]
+    fn arithmetic_overflow_does_not_emit_available_indicators() {
+        let rows: Vec<Candle> = (0..40).map(|index| Candle {
+            time: index + 1,
+            open: f64::MAX * 0.9,
+            high: f64::MAX * 0.9,
+            low: f64::MAX * 0.9,
+            close: f64::MAX * 0.9,
+            volume: 1.0,
+        }).collect();
+        let result = calculate_readings(&rows).unwrap();
+        assert!(result.iter().all(|reading| !reading.available));
+        assert!(result[0].detail.contains("numeric range"));
+    }
+
+    #[test]
     fn excessive_input_is_rejected() {
         assert!(calculate_readings(&candles(MAX_CANDLES + 1)).is_err());
     }
