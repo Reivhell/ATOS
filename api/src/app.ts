@@ -10,8 +10,10 @@ const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_REQUESTS = 30;
 const FAILED_AUTH_MAX_REQUESTS = 10;
 
-function jsonError(code: string, message: string, status: 400 | 401 | 403 | 404 | 408 | 413 | 415 | 429 | 500) {
-  return Response.json({ error: { code, message }, contractVersion: LOCAL_RESEARCH_API_CONTRACT }, { status, headers: securityHeaders() });
+function jsonError(code: string, message: string, status: 400 | 401 | 403 | 404 | 408 | 413 | 415 | 429 | 500, requestId?: string) {
+  const headers = new Headers(securityHeaders());
+  if (requestId) headers.set('X-Request-ID', requestId);
+  return Response.json({ error: { code, message }, contractVersion: LOCAL_RESEARCH_API_CONTRACT }, { status, headers });
 }
 
 function securityHeaders(): HeadersInit {
