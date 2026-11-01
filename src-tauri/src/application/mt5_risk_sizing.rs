@@ -9,7 +9,9 @@ use crate::infrastructure::mt5::{
         account_risk_inventory, Mt5AccountRiskInventory, Mt5Bridge, Mt5BridgeStatus,
         Mt5MarginPreflightResult, Mt5PendingOrderSnapshot, Mt5PositionSnapshot, Mt5Snapshot,
     },
-    market_data::Mt5InstrumentSpecificationRecord,
+    market_data::{
+        Mt5InstrumentSpecificationRecord, Mt5RiskDecisionRecord, Mt5RiskDecisionReceipt,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +95,8 @@ pub struct Mt5RiskSizingResult {
     pub contract_completeness: String,
     pub calculated_at_ms: i64,
     pub snapshot_sequence: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_receipt: Option<Mt5RiskDecisionReceipt>,
 }
 
 struct CorrelatedRiskInventory {
@@ -623,7 +627,7 @@ pub fn calculate(
     } else {
         "BLOCKED"
     };
-    Ok(Mt5RiskSizingResult {
+    let mut result = Mt5RiskSizingResult {
         decision: decision.into(), reasons, limitations, broker_server: broker_server.into(), account_login: account_login.into(), symbol: symbol.into(), side,
         account_currency: snapshot.account.currency, equity: snapshot.account.equity, risk_percent: request.risk_percent,
         risk_budget, effective_risk_budget, account_available_risk_budget, entry_price: entry, stop_loss_price: request.stop_loss_price, stop_distance, tick_size,
@@ -647,9 +651,34 @@ pub fn calculate(
         margin_estimation: "MT5 OrderCalcMargin on the requested side/volume at the terminal quote, added to current account margin without assuming hedged/netting offsets".into(),
         commission_estimation: "NOT_COMPUTED: commission schedule is broker-specific; estimated stop-loss risk excludes commission, swap, slippage and gap risk".into(),
         quote_age_ms: quote_age, specification_revision: specification.revision,
-        specification_fingerprint_sha256: specification.fingerprint_sha256, contract_completeness: specification.completeness,
+        specification_fingerprint_sha256: specification.fingerprint_sha256.clone(), contract_completeness: specification.completeness,
         calculated_at_ms: completed_at_ms, snapshot_sequence: calculation_snapshot_sequence,
-    })
+        audit_receipt: None,
+    };
+    let request_payload = serde_json::json!({
+        "brokerServer": broker_server,
+        "accountLogin": account_login,
+        "symbol": symbol,
+        "side": result.side,
+        "stopLossPrice": request.stop_loss_price,
+        "riskPercent": request.risk_percent
+    });
+    let result_payload = serde_json::to_value(&result)
+        .map_err(|error| format!("Risk-sizing result could not be canonicalized for audit: {error}"))?;
+    let receipt = bridge.append_risk_decision(&Mt5RiskDecisionRecord {
+        broker_server: broker_server.to_string(),
+        account_login: account_login.to_string(),
+        symbol: symbol.to_string(),
+        decision: decision.to_string(),
+        decided_at_ms: completed_at_ms,
+        request: request_payload,
+        result: result_payload,
+        snapshot_sequence: calculation_snapshot_sequence,
+        specification_revision: specification.revision,
+        specification_fingerprint_sha256: specification.fingerprint_sha256.clone(),
+    })?;
+    result.audit_receipt = Some(receipt);
+    Ok(result)
 }
 
 fn correlated_preflight_inventory(
