@@ -744,7 +744,7 @@ fn run_once(
                 entry_cash_spent = total_cost;
                 in_position = true;
             } else if crossed_down && in_position {
-                let fill = candles[i].open * (1.0 - slip_rate);
+                let fill = candle.open * (1.0 - slip_rate);
                 let proceeds = quantity * fill;
                 let fee = proceeds * fee_rate;
                 let net_proceeds = proceeds - fee;
