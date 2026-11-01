@@ -351,7 +351,7 @@ pub fn save_provider_key(
     if provider == "ollama" {
         return Err("Local Ollama does not accept an API key in this runtime.".into());
     }
-    let mut secret = Zeroizing::new(api_key);
+    let secret = Zeroizing::new(api_key);
     if secret.len() < 16
         || secret.len() > 4096
         || secret.trim() != secret.as_str()
@@ -1604,8 +1604,7 @@ fn validate_model_artifact_format(
                 .map_err(|_| "SafeTensors header length is truncated.".to_string())?;
             let header_len = u64::from_le_bytes(length_bytes);
             const MAX_SAFETENSORS_HEADER_BYTES: u64 = 100 * 1024 * 1024;
-            if header_len < 2
-                || header_len > MAX_SAFETENSORS_HEADER_BYTES
+            if !(2..=MAX_SAFETENSORS_HEADER_BYTES).contains(&header_len)
                 || header_len >= file_size - 8
             {
                 return Err("SafeTensors header length is outside its allowed bounds.".into());
@@ -1935,14 +1934,12 @@ pub fn import_local_model(
         let _ = fs::remove_file(&final_path);
         return Err("Model registry could not accept the imported artifact.".into());
     }
-    if let Err(error) = append_journal_tx(
+    append_journal_tx(
         &transaction,
         &model.id,
         "model_artifact_imported",
         json!({ "modelId": model.id, "format": model.format, "sizeBytes": model.size_bytes, "sha256": model.sha256, "executionStatus": model.execution_status }),
-    ) {
-        return Err(error);
-    }
+    )?;
     transaction
         .commit()
         .map_err(|_| "Model registry transaction could not be committed.".to_string())?;
@@ -2026,7 +2023,7 @@ pub fn remove_imported_model(
         }
         return Err(error);
     }
-    if let Err(_) = transaction.commit() {
+    if transaction.commit().is_err() {
         if moved_to_quarantine {
             let _ = fs::rename(&quarantine_path, &path);
         }

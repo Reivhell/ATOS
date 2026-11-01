@@ -1404,7 +1404,7 @@ impl Mt5MarketDataStore {
                 } else {
                     "Broker session calendar is unknown. Interval anomalies are unclassified candidates; do not infer market closures or confirmed missing tradable candles.".into()
                 },
-                session_calendar_revision: session_calendar_revision.clone(),
+                session_calendar_revision,
                 session_calendar_fingerprint_sha256: session_calendar_fingerprint_sha256.clone(),
                 session_calendar_time_basis: if session_calendar_revision.is_some() {
                     "broker_server_wall_clock; no UTC offset or DST inference".into()
@@ -1658,7 +1658,7 @@ fn verify_existing_session_calendars(
             ));
         }
         let age_ms = received_at_ms.saturating_sub(last_observed);
-        if age_ms > MAX_SESSION_CALENDAR_AGE_MS || age_ms < -MAX_CLOCK_SKEW_MS {
+        if !(-MAX_CLOCK_SKEW_MS..=MAX_SESSION_CALENDAR_AGE_MS).contains(&age_ms) {
             return Err(format!("Retained MT5 session calendar for {symbol} is stale or future-dated; a fresh complete schedule is required."));
         }
         let latest: Option<(i64, String)> = connection.query_row(

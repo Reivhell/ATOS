@@ -27,8 +27,9 @@ pub const CATALOG_JSON: &str =
     include_str!("../../../scripts/fixtures/technical-analysis-master-list.v1.json");
 
 static CATALOG: OnceLock<Result<StrictCatalogManifest, String>> = OnceLock::new();
-static ISSUED_WORK_PLANS: OnceLock<Mutex<HashMap<String, (i64, StrictAnalysisWorkPlan, bool)>>> =
-    OnceLock::new();
+type IssuedWorkPlanRegistry = Mutex<HashMap<String, (i64, StrictAnalysisWorkPlan, bool)>>;
+
+static ISSUED_WORK_PLANS: OnceLock<IssuedWorkPlanRegistry> = OnceLock::new();
 const WORK_PLAN_TTL_MS: i64 = 15 * 60 * 1_000;
 const MAX_ISSUED_WORK_PLANS: usize = 256;
 const STRICT_STORE_SCHEMA_VERSION: i64 = 3;
@@ -228,7 +229,7 @@ pub struct CreateWorkPlanRequest {
     pub dataset_sha256: String,
 }
 
-fn issued_work_plans() -> &'static Mutex<HashMap<String, (i64, StrictAnalysisWorkPlan, bool)>> {
+fn issued_work_plans() -> &'static IssuedWorkPlanRegistry {
     ISSUED_WORK_PLANS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -245,6 +246,7 @@ fn issue_work_plan(plan: StrictAnalysisWorkPlan) -> Result<StrictAnalysisWorkPla
     Ok(plan)
 }
 
+#[cfg(test)]
 fn work_plan_is_unmodified_and_unexpired(plan: &StrictAnalysisWorkPlan) -> Result<bool, String> {
     let now = chrono::Utc::now().timestamp_millis();
     let mut registry = issued_work_plans()
@@ -438,27 +440,9 @@ fn finalization_event_digest(
 }
 
 fn legacy_orphan_attempt_digest(
-    id: &str,
-    plan_sha: &str,
-    started: i64,
-    completed: Option<i64>,
-    status: &str,
-    decision: Option<&str>,
-    receipt: Option<&str>,
-    bundle: Option<&str>,
-    result: Option<&str>,
+    material: &LegacyOrphanAttemptDigestMaterial,
 ) -> Result<String, String> {
-    sha256_serializable(&LegacyOrphanAttemptDigestMaterial {
-        work_plan_id: id.to_string(),
-        plan_sha256: plan_sha.to_string(),
-        started_at_ms: started,
-        completed_at_ms: completed,
-        status: status.to_string(),
-        decision: decision.map(str::to_string),
-        receipt_sha256: receipt.map(str::to_string),
-        assessment_bundle_sha256: bundle.map(|value| sha256_bytes(value.as_bytes())),
-        result_sha256: result.map(|value| sha256_bytes(value.as_bytes())),
-    })
+    sha256_serializable(material)
 }
 
 fn read_chain_events(
@@ -689,8 +673,17 @@ fn verify_audit_chain_connection(connection: &Connection) -> Result<(usize, i64,
             Some((_, _, _, digest, Some(_))) if digest == plan_sha => {},
             None => {
                 let imported_at = completed.unwrap_or(*started);
-                let digest = legacy_orphan_attempt_digest(id, plan_sha, *started, *completed, status,
-                    decision.as_deref(), receipt.as_deref(), bundle.as_deref(), result.as_deref())?;
+                let digest = legacy_orphan_attempt_digest(&LegacyOrphanAttemptDigestMaterial {
+                    work_plan_id: id.clone(),
+                    plan_sha256: plan_sha.clone(),
+                    started_at_ms: *started,
+                    completed_at_ms: *completed,
+                    status: status.clone(),
+                    decision: decision.clone(),
+                    receipt_sha256: receipt.clone(),
+                    assessment_bundle_sha256: bundle.as_deref().map(|value| sha256_bytes(value.as_bytes())),
+                    result_sha256: result.as_deref().map(|value| sha256_bytes(value.as_bytes())),
+                })?;
                 if !chain_event_exists(&events, "legacy_orphan_attempt_imported", Some(id), imported_at, &digest) {
                     return Err(format!("Historical attempt {id} lost its plan before audit-chain migration and lacks a matching immutable legacy snapshot."));
                 }
@@ -1210,17 +1203,17 @@ fn open_strict_store(path: &Path) -> Result<Connection, String> {
                 if plans.iter().any(|(plan_id, _, _, _, _)| plan_id == id) {
                     return Err(format!("Legacy attempt {id} references a present but unconsumed/mismatched plan; refusing schema migration."));
                 }
-                let digest = legacy_orphan_attempt_digest(
-                    id,
-                    plan_sha,
-                    *started,
-                    *completed,
-                    status,
-                    decision.as_deref(),
-                    receipt.as_deref(),
-                    bundle.as_deref(),
-                    result.as_deref(),
-                )?;
+                let digest = legacy_orphan_attempt_digest(&LegacyOrphanAttemptDigestMaterial {
+                    work_plan_id: id.clone(),
+                    plan_sha256: plan_sha.clone(),
+                    started_at_ms: *started,
+                    completed_at_ms: *completed,
+                    status: status.clone(),
+                    decision: decision.clone(),
+                    receipt_sha256: receipt.clone(),
+                    assessment_bundle_sha256: bundle.as_deref().map(|value| sha256_bytes(value.as_bytes())),
+                    result_sha256: result.as_deref().map(|value| sha256_bytes(value.as_bytes())),
+                })?;
                 append_audit_event_raw(
                     &tx,
                     "legacy_orphan_attempt_imported",
@@ -1580,6 +1573,7 @@ fn specialist_dispatch_receipt_gaps(
     Ok(gaps)
 }
 
+#[cfg(test)]
 fn persisted_work_plan_is_unmodified_and_unexpired(
     plan: &StrictAnalysisWorkPlan,
     store_path: &Path,
