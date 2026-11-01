@@ -86,8 +86,8 @@ function canonicalEvidenceRefMatchesSnapshot(reference, snapshotSha256) {
 }
 
 function hasCanonicalEvidenceRefs(refs, snapshotSha256) {
-  return Array.isArray(refs) && refs.length > 0
-    && refs.every((ref) => typeof ref === 'string' && ref.trim() === ref
+  return Array.isArray(refs) && refs.length > 0 && refs.length <= 32
+    && refs.every((ref) => typeof ref === 'string' && ref.length <= 256 && ref.trim() === ref
       && canonicalEvidenceRefMatchesSnapshot(ref, snapshotSha256))
     && new Set(refs).size === refs.length;
 }
