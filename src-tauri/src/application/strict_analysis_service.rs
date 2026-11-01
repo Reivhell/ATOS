@@ -35,7 +35,7 @@ pub(crate) fn authoritative_strict_series(
     let now = Utc::now().timestamp_millis();
     if !series.is_live
         || !series.provider_status.starts_with("CONNECTED")
-        || !series.source.starts_with("Binance public REST")
+        || !(series.source == "Binance public REST" || series.source.starts_with("Binance public REST · "))
         || series.retrieved_at_ms <= 0
         || series.retrieved_at_ms > now.saturating_add(30_000)
         || now.saturating_sub(series.retrieved_at_ms) > CANDLE_PROVIDER_RETRIEVAL_MAX_AGE_MS
