@@ -9,6 +9,13 @@ const bootstrap = read('../src-tauri/src/adapters/tauri/bootstrap.rs');
 const bridge = read('../src/lib/adapters/tauri/bridge.ts');
 const app = read('../src/App.svelte');
 
+test('native analysis shares one OHLCV and timestamp validator across all calculation paths', () => {
+  assert.match(rust, /fn validate_candles\(candles: &\[Candle\], context: &str\)/);
+  assert.match(rust, /validate_candles\(candles, "Indicator"\)/);
+  assert.match(rust, /validate_candles\(candles, "Signal"\)\?/);
+  assert.match(rust, /validate_candles\(candles, "Structure"\)\?/);
+});
+
 test('indicator calculations live in the Rust domain and enforce bounded valid OHLCV input', () => {
   assert.match(rust, /pub fn calculate_readings\(candles: &\[Candle\]\)/);
   assert.match(rust, /const MAX_CANDLES: usize = 10_000/);
