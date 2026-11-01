@@ -354,7 +354,7 @@ pub fn calculate(
             request.stop_loss_price,
         ) {
             Ok(result) => {
-                match correlated_preflight_inventory(&bridge, result, broker_server, account_login, symbol) {
+                match correlated_preflight_inventory(bridge, &result, broker_server, account_login, symbol) {
                     Err(error) => reasons.push(format!("Native calculation could not be bound to a complete account inventory: {error}")),
                     Ok(correlated) => {
                         snapshot = correlated.snapshot;
@@ -365,7 +365,7 @@ pub fn calculate(
                         account_available_risk_budget = (max_account_risk_budget - account_risk.current_stop_risk).max(0.0);
                         calculation_snapshot_sequence = result.snapshot_sequence;
                         let preflight_checked_at_ms = chrono::Utc::now().timestamp_millis();
-                        quote_age = preflight_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
+                        let quote_age = preflight_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
                         entry = if side == "BUY" { snapshot.symbol.ask } else { snapshot.symbol.bid };
                         stop_distance = if side == "BUY" { entry - request.stop_loss_price } else { request.stop_loss_price - entry };
                         if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) || !stop_distance.is_finite() || stop_distance <= 0.0 {
@@ -388,7 +388,7 @@ pub fn calculate(
                                 normalized_volume = corrected;
                                 match bridge.margin_preflight(broker_server, account_login, symbol, &side, normalized_volume, request.stop_loss_price) {
                                     Ok(rechecked) => {
-                                        match correlated_preflight_inventory(&bridge, rechecked, broker_server, account_login, symbol) {
+                                        match correlated_preflight_inventory(bridge, &rechecked, broker_server, account_login, symbol) {
                                             Err(error) => reasons.push(format!("Corrected-volume calculation could not be bound to a complete account inventory: {error}")),
                                             Ok(correlated_again) => {
                                                 snapshot = correlated_again.snapshot;
@@ -399,7 +399,7 @@ pub fn calculate(
                                                 account_available_risk_budget = (max_account_risk_budget - account_risk.current_stop_risk).max(0.0);
                                                 calculation_snapshot_sequence = rechecked.snapshot_sequence;
                                                 let corrected_checked_at_ms = chrono::Utc::now().timestamp_millis();
-                                                quote_age = corrected_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
+                                                let quote_age = corrected_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
                                                 entry = if side == "BUY" { snapshot.symbol.ask } else { snapshot.symbol.bid };
                                                 stop_distance = if side == "BUY" { entry - request.stop_loss_price } else { request.stop_loss_price - entry };
                                                 if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) || !stop_distance.is_finite() || stop_distance <= 0.0 {
