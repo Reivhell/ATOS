@@ -3450,6 +3450,10 @@ mod tests {
             !evidence_ref_resolves_to_market_snapshot(&reference, &ambiguous_market),
             "duplicate candle timestamps must not resolve to an ambiguous evidence locator"
         );
+        assert!(
+            !has_registered_evidence_refs(std::slice::from_ref(&reference), &ambiguous_market),
+            "completion must reject evidence whose candle locator is ambiguous"
+        );
 
         let invalid = [
             format!("snapshot:{}:rust-indicator:{}/{}/{}", market.dataset_sha256, market.symbol, market.timeframe, market.candles[0].time),
