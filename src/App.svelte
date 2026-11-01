@@ -281,6 +281,7 @@
 
   async function loadChartSeries(request: CandleSeriesRequest): Promise<ValidatedCandleSeriesSnapshot | null> {
     const requestEpoch = ++chartRequestEpoch;
+    indicatorRequestEpoch += 1;
     chartSeriesBusy = true;
     chartSeriesResponse = null;
     technicalReadings = [];
