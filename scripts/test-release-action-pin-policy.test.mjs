@@ -64,6 +64,6 @@ test('regular Bun and frontend CI jobs require committed frozen dependency lockf
   const frontend = job('frontend', 'rust');
   assert.match(bun, /run: bun install --frozen-lockfile/);
   assert.doesNotMatch(bun, /run: bun install\s*(?:\n|$)/);
-  assert.match(frontend, /run: npm ci --no-audit --fund=false/);
+  assert.match(frontend, /run: bun install --frozen-lockfile/);
   assert.doesNotMatch(frontend, /run: npm install/);
 });
