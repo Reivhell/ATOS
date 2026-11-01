@@ -3317,6 +3317,38 @@ mod tests {
     }
 
     #[test]
+    fn evidence_refs_must_resolve_to_the_exact_market_scope_and_candle() {
+        let plan = sample_plan();
+        let request = request(plan.clone(), assessments_for(&plan));
+        let market = &request.market_data;
+        let reference = format!(
+            "snapshot:{}:binance:{}/{}/{}",
+            market.dataset_sha256,
+            market.symbol,
+            market.timeframe,
+            market.candles[0].time
+        );
+        assert!(evidence_ref_resolves_to_market_snapshot(&reference, market));
+        assert!(has_registered_evidence_refs(std::slice::from_ref(&reference), market));
+
+        let invalid = [
+            format!("snapshot:{}:rust-indicator:{}/{}/{}", market.dataset_sha256, market.symbol, market.timeframe, market.candles[0].time),
+            format!("snapshot:{}:binance:ETH-USD/{}/{}", market.dataset_sha256, market.timeframe, market.candles[0].time),
+            format!("snapshot:{}:binance:{}/4h/{}", market.dataset_sha256, market.symbol, market.candles[0].time),
+            format!("snapshot:{}:binance:{}/{}/{}", market.dataset_sha256, market.symbol, market.timeframe, market.candles[0].time + 1),
+            format!("snapshot:{}:binance:{}/{}/{}", "b".repeat(64), market.symbol, market.timeframe, market.candles[0].time),
+            format!("snapshot:{}:binance:catalog-{}", market.dataset_sha256, sha256_bytes(b"not-a-candle")),
+        ];
+        for reference in invalid {
+            assert!(
+                !evidence_ref_resolves_to_market_snapshot(&reference, market),
+                "unregistered evidence locator resolved: {reference}"
+            );
+            assert!(!has_registered_evidence_refs(&[reference], market));
+        }
+    }
+
+    #[test]
     fn snapshot_sha256_hex_case_does_not_change_digest_identity() {
         let plan = sample_plan();
         let mut req = request(plan.clone(), assessments_for(&plan));
