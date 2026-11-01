@@ -229,6 +229,7 @@ test('commentary is bounded and domain references cannot be cross-wired', async 
     report.marketContext.asOf = new Date(report.marketContext.latestClosedBarAtMs).toISOString();
     report.marketContext.retrievedAtMs = Date.now();
     for (const item of report.evidenceBundle) item.observedAt = report.marketContext.asOf;
+    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
     const result = await evaluateAgentResearchReport(report);
     assert.equal(result.decision.decision, 'BLOCK');
   });
@@ -238,6 +239,7 @@ test('commentary is bounded and domain references cannot be cross-wired', async 
     report.marketContext.latestClosedBarAtMs = report.marketContext.retrievedAtMs - 100;
     report.marketContext.asOf = new Date(report.marketContext.latestClosedBarAtMs).toISOString();
     for (const item of report.evidenceBundle) item.observedAt = report.marketContext.asOf;
+    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
     const result = await evaluateAgentResearchReport(report);
     assert.equal(result.decision.decision, 'BLOCK');
   });
