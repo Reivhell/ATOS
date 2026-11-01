@@ -283,6 +283,7 @@
       chartSeriesResponse = null;
       technicalReadings = [];
       nativeStructure = null;
+      nativeIndicatorSignals = null;
       chartSeriesError = toMessage(error);
     } finally {
       loading = false;
@@ -296,6 +297,7 @@
     chartSeriesResponse = null;
     technicalReadings = [];
     nativeStructure = null;
+    nativeIndicatorSignals = null;
     chartSeriesError = '';
     try {
       const typedRequest = buildCandleSeriesRequest(snapshot?.marketDataCapabilities, request.symbol, request.interval);
@@ -319,6 +321,7 @@
     if (!desktop) {
       technicalReadings = [];
       nativeStructure = null;
+      nativeIndicatorSignals = null;
       return;
     }
     const [indicatorResult, structureResult, signalResult] = await Promise.allSettled([
