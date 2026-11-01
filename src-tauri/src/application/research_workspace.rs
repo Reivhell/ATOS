@@ -1734,9 +1734,7 @@ impl ResearchWorkspace {
             &bootstrap,
             &risk_review,
             strategy_tournament.as_ref(),
-            request.max_drawdown_pct,
-            request.minimum_positive_oos_ratio,
-            request.minimum_sharpe_ratio,
+            (request.max_drawdown_pct, request.minimum_positive_oos_ratio, request.minimum_sharpe_ratio),
         );
         let created_at_ms = Utc::now().timestamp_millis();
         let id = Uuid::new_v4().to_string();
@@ -2507,10 +2505,9 @@ fn evaluate_committee(
     bootstrap: &BlockBootstrapSummary,
     risk: &RiskReviewResult,
     tournament: Option<&StrategyParameterTournament>,
-    maximum_drawdown_pct: f64,
-    minimum_positive_oos_ratio: f64,
-    minimum_sharpe_ratio: f64,
+    thresholds: (f64, f64, f64),
 ) -> ResearchGateDecision {
+    let (maximum_drawdown_pct, minimum_positive_oos_ratio, minimum_sharpe_ratio) = thresholds;
     let mut blockers = Vec::new();
     if result.trade_count < 3 {
         blockers.push(
