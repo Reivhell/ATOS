@@ -12,18 +12,13 @@ fn default_max_data_age_ms() -> i64 {
     300_000
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MarketDataPurpose {
+    #[default]
     Research,
     Backtest,
     BrokerContext,
-}
-
-impl Default for MarketDataPurpose {
-    fn default() -> Self {
-        Self::Research
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
