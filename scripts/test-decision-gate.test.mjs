@@ -182,6 +182,24 @@ test('market-data gate requires an auditable SHA-256 snapshot and exact scope', 
 });
 
 
+test('assessment snapshot digest must be valid SHA-256 and compare independently of hex case', () => {
+  const input = validInput();
+  const index = input.assessments.findIndex((entry) => entry.status === 'evaluated');
+  input.assessments[index] = { ...input.assessments[index], dataSnapshotId: 'not-a-digest' };
+  let result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('valid SHA-256 data snapshot identifier')));
+
+  const uppercase = validInput();
+  const evaluatedIndex = uppercase.assessments.findIndex((entry) => entry.status === 'evaluated');
+  uppercase.assessments[evaluatedIndex] = {
+    ...uppercase.assessments[evaluatedIndex],
+    dataSnapshotId: 'A'.repeat(64),
+    evidenceRefs: [`snapshot:${'A'.repeat(64)}:fixture:catalog-${catalog.indexOf(catalog.find((item) => item.id === uppercase.assessments[evaluatedIndex].catalogId))}`],
+  };
+  result = evaluateStrictDecisionGate(uppercase);
+  assert.ok(!result.reasons.some((reason) => reason.includes('does not match the validated market-data dataset')));
+});
+
 test('assessment timestamps must include a timezone and evaluated evidence must bind to the exact dataset fingerprint', () => {
   const input = validInput();
   const index = catalog.findIndex((entry) => entry.availability === 'Calculated now');
