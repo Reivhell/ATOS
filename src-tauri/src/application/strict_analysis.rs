@@ -26,9 +26,10 @@ pub const REQUIRED_CONCEPT_COUNT: usize = 364;
 pub const CATALOG_JSON: &str =
     include_str!("../../../scripts/fixtures/technical-analysis-master-list.v1.json");
 
+type IssuedWorkPlanRegistry = Mutex<HashMap<String, (i64, StrictAnalysisWorkPlan, bool)>>;
+
 static CATALOG: OnceLock<Result<StrictCatalogManifest, String>> = OnceLock::new();
-static ISSUED_WORK_PLANS: OnceLock<Mutex<HashMap<String, (i64, StrictAnalysisWorkPlan, bool)>>> =
-    OnceLock::new();
+static ISSUED_WORK_PLANS: OnceLock<IssuedWorkPlanRegistry> = OnceLock::new();
 const WORK_PLAN_TTL_MS: i64 = 15 * 60 * 1_000;
 const MAX_ISSUED_WORK_PLANS: usize = 256;
 const STRICT_STORE_SCHEMA_VERSION: i64 = 3;
