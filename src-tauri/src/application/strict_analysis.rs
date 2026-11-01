@@ -2512,7 +2512,7 @@ where
     if !market.validated {
         reasons.push("Market data has not passed the validated-data contract.".into());
     }
-    if !market.source.starts_with("Binance public REST") {
+    if !(market.source == "Binance public REST" || market.source.starts_with("Binance public REST · ")) {
         reasons.push("Strict completion requires trusted Rust-owned Binance public REST provenance.".into());
     }
     if !valid_timestamp(&market.as_of) {
