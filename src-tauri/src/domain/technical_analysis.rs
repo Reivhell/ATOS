@@ -307,6 +307,21 @@ pub fn calculate_structure(candles: &[Candle]) -> Result<NativeStructureSnapshot
     if candles.len() > MAX_CANDLES {
         return Err(format!("Structure input exceeds the {MAX_CANDLES}-candle safety limit."));
     }
+    let mut previous_time = None;
+    for (index, candle) in candles.iter().enumerate() {
+        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
+            return Err(format!("Structure candle {index} has a non-positive or non-increasing timestamp."));
+        }
+        previous_time = Some(candle.time);
+        if ![candle.open, candle.high, candle.low, candle.close, candle.volume].iter().all(|value| value.is_finite())
+            || candle.open <= 0.0 || candle.high <= 0.0 || candle.low <= 0.0 || candle.close <= 0.0
+            || candle.volume < 0.0
+            || candle.high < candle.open.max(candle.close).max(candle.low)
+            || candle.low > candle.open.min(candle.close).min(candle.high)
+        {
+            return Err(format!("Structure candle {index} violates positive-price, non-negative-volume, or OHLC invariants."));
+        }
+    }
     let pivots = research_smc::classify_confirmed_swings(candles, 2, 2)?
         .into_iter()
         .map(NativeStructurePivot::from)
@@ -385,6 +400,13 @@ mod tests {
     #[test]
     fn excessive_input_is_rejected() {
         assert!(calculate_readings(&candles(MAX_CANDLES + 1)).is_err());
+    }
+
+    #[test]
+    fn native_structure_rejects_malformed_input() {
+        let mut rows = candles(40);
+        rows[12].low = rows[12].high + 1.0;
+        assert!(calculate_structure(&rows).unwrap_err().contains("OHLC invariants"));
     }
 
     #[test]
