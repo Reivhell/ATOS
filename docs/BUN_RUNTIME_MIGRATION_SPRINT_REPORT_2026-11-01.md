@@ -4,17 +4,18 @@
 **Repository:** `Reivhell/ATOS`  
 **Target branch:** `dev`  
 **Working branch:** `migration/bun-runtime-primary`  
-**Sprint completion:** **85%**  
-**Status:** Bun-first migration checks are passing on the working branch. The branch is not yet merge-ready for `dev`: GitHub reports the PR as non-mergeable and the branch has diverged from `dev`. Tagged desktop release validation also remains pending because PR runs skip the tagged build matrix.
+**Sprint completion:** **90%**  
+**Status:** The migration branch was deliberately installed as the `dev` branch head after creating a backup of the previous `dev` head. The branch reconciliation blocker is resolved by replacement, not by a semantic three-way merge. Applicable CI checks pass; tagged desktop release validation remains pending.
 
 ## Baseline and migration results
 
 - The optional local research API already used Bun and Hono; this migration extends Bun to primary JavaScript scripts and CI workflows.
 - The committed Bun lockfile installs successfully in frozen mode with `bun install --frozen-lockfile`.
-- Frontend typecheck/build, repository guardrails, the full Bun source suite, deterministic agent release qualification, and Hono API integration passed.
+- Repository guardrails, the full Bun source suite, deterministic agent release qualification, Hono API integration, and frontend typecheck/build passed.
 - Rust formatting, `cargo test --all-targets`, and `cargo clippy --all-targets --all-features -- -D warnings` passed in the latest PR CI run.
-- Latest PR CI run: https://github.com/Reivhell/ATOS/actions/runs/41308834420
+- Latest CI run: https://github.com/Reivhell/ATOS/actions/runs/41309680127
 - The tagged desktop-build matrix was skipped for an untagged pull request. This run does not certify the tagged release pipeline, MetaEditor, a real MT5 terminal, or live-broker acceptance.
+- The previous `dev` head is preserved at `backup/dev-before-overwrite-2026-11-01`.
 
 ## Sprint scope
 
@@ -43,8 +44,9 @@
 - Preserved request IDs on API body-timeout responses and extended the stalled-body integration-test timeout.
 - Changed Rust atomic guards from `const` to `static` to respect interior mutability.
 - Resolved Clippy findings without weakening the `-D warnings` gate.
-- Latest PR CI run `41308834420`: frontend, Bun guardrails/source tests, deterministic release qualification, API integration, Rust formatting, Rust tests, and Clippy all passed. Tagged desktop builds were skipped as expected for an untagged PR.
+- Latest CI run `41309680127`: frontend, Bun guardrails/source tests, deterministic release qualification, API integration, Rust formatting, Rust tests, and Clippy all passed. Tagged desktop builds were skipped as expected for an untagged PR.
+- Replaced `dev` with commit `300c5c53cb28327c77355ae53146dc4a81028343`; the previous `dev` head remains recoverable from the backup branch.
 
 ## Next step
 
-First reconcile the working branch with the current `dev` tree without dropping changes unique to either side, then rerun CI. After the branch is mergeable and CI passes, validate the tagged desktop release path and review its release evidence and artifacts. MT5/MetaEditor and live-broker acceptance remain separate operational gates.
+Validate the tagged desktop release path and review its release evidence and artifacts before declaring 100%. MT5/MetaEditor and live-broker acceptance remain separate operational gates.
