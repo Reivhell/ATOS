@@ -1748,11 +1748,20 @@ mod tests {
             },
         );
         assert!(lower_drawdown_tie.is_lt());
-        let lexicographic_tie =
-            compare_tournament_candidate_priority(
-                TournamentCandidatePriority { sharpe: 1.0, drawdown: 4.0, fast: 8, slow: 24 },
-                TournamentCandidatePriority { sharpe: 1.0, drawdown: 4.0, fast: 10, slow: 30 },
-            );
+        let lexicographic_tie = compare_tournament_candidate_priority(
+            TournamentCandidatePriority {
+                sharpe: 1.0,
+                drawdown: 4.0,
+                fast: 8,
+                slow: 24,
+            },
+            TournamentCandidatePriority {
+                sharpe: 1.0,
+                drawdown: 4.0,
+                fast: 10,
+                slow: 30,
+            },
+        );
         assert!(lexicographic_tie.is_lt());
     }
 
