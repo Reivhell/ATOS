@@ -15,7 +15,7 @@
 - The primary repository guardrails and full source test suite now use Bun scripts and Bun's test runner.
 - Frontend build, Tauri dev/build commands, release evidence, installer staging, and attestation verification now invoke scripts through Bun. Both lockfiles remain required as a conservative transition safeguard.
 - Release preflight now checks Bun and native toolchains, not Node/npm availability.
-- The existing validation report says Bun/Hono runtime integration and native/release acceptance were not executed in the audited environment. CI configuration is not evidence that those checks have passed.
+- The latest PR CI run confirms the frontend build, Bun guardrails/full source test suite, and Bun/Hono integration suite pass on the migration branch. Rust formatting/tests/Clippy are still in progress; tagged release builds are skipped on this branch event. CI does not certify MetaEditor or live-broker acceptance.
 
 ## Sprint scope
 
@@ -42,7 +42,8 @@
 - Existing package scripts, CI workflow, release preflight, Bun lockfile, and latest validation report reviewed.
 - Created working branch `migration/bun-runtime-primary`.
 - Updated package scripts, CI and tagged-release workflow commands, Tauri hooks, release preflight policy, and related repository contracts to use Bun.
-- No application business logic was changed. Bun is not installed in the editing environment, so local test execution was unavailable; CI must validate the migration before it is treated as complete.
+- Fixed release-evidence test fixtures to use the CI revision, allowed the preflight contract test enough time for its nested Bun process, and preserved request IDs on body-timeout responses. Changed two mutable Rust atomic guards from `const` to `static` after Clippy exposed the correctness issue.
+- Latest PR CI run: frontend build passed; Bun guardrails and full source tests passed; Bun/Hono integration passed. Rust checks are not yet confirmed green. The tagged-release matrix is intentionally skipped for an untagged PR.
 
 ## Next implementation step
 
