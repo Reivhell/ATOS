@@ -157,7 +157,7 @@ export function evaluateStrictAnalysisCompletion({ workPlan, assessments, market
 
   if (Array.isArray(assessments)) {
     for (const assessment of assessments) {
-      if (assessment?.status === 'evaluated' && assessment.dataSnapshotId !== plan?.datasetSha256) {
+      if (assessment?.status === 'evaluated' && String(assessment.dataSnapshotId ?? '').toLowerCase() !== String(plan?.datasetSha256 ?? '').toLowerCase()) {
         reasons.push(`Assessment dataSnapshotId does not match the work-plan snapshot: ${assessment?.catalogId ?? 'unknown'}.`);
       }
     }
