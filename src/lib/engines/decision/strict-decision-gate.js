@@ -82,7 +82,8 @@ function canonicalEvidenceRefMatchesSnapshot(reference, snapshotSha256) {
   const match = /^snapshot:([a-fA-F0-9]{64}):(binance|mt5|rust-indicator|rust-structure|backtest):([A-Za-z0-9._~/-]+)$/.exec(reference);
   return Boolean(match)
     && match[1].toLowerCase() === snapshotSha256.toLowerCase()
-    && !match[3].includes('..');
+    && !match[3].includes('..')
+    && match[3].split('/').every((segment) => segment.length > 0 && !segment.startsWith('.'));
 }
 
 function hasCanonicalEvidenceRefs(refs, snapshotSha256) {
