@@ -2413,8 +2413,7 @@ mod tests {
         .is_ok());
         assert!(
             validate_market_data_scope(
-                "12345",
-                "Broker-Live",
+                ("12345", "Broker-Live"),
                 &valid,
                 &Mt5MarketDataBatch::default(),
                 &[],
@@ -2509,8 +2508,7 @@ mod tests {
         .is_err());
         assert!(
             validate_market_data_scope(
-                "12345",
-                "Broker-Live",
+                ("12345", "Broker-Live"),
                 &valid,
                 &Mt5MarketDataBatch::default(),
                 &schedules,
