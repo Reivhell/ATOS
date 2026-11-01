@@ -156,8 +156,7 @@ pub fn calculate(
     if !(0..=MAX_HEARTBEAT_AGE_MS).contains(&heartbeat_age) {
         return Err("MT5 heartbeat is outside the risk-sizing freshness window.".into());
     }
-    let mut quote_age =
-        quote_age_within_window(now, snapshot.symbol.quote_time_ms).ok_or_else(|| {
+    quote_age_within_window(now, snapshot.symbol.quote_time_ms).ok_or_else(|| {
             "MT5 quote timestamp is future-dated or older than 60 seconds.".to_string()
         })?;
     if snapshot.symbol.name != symbol {
@@ -355,7 +354,7 @@ pub fn calculate(
             request.stop_loss_price,
         ) {
             Ok(result) => {
-                match correlated_preflight_inventory(&bridge, &result, broker_server, account_login, symbol) {
+                match correlated_preflight_inventory(&bridge, result, broker_server, account_login, symbol) {
                     Err(error) => reasons.push(format!("Native calculation could not be bound to a complete account inventory: {error}")),
                     Ok(correlated) => {
                         snapshot = correlated.snapshot;
@@ -389,7 +388,7 @@ pub fn calculate(
                                 normalized_volume = corrected;
                                 match bridge.margin_preflight(broker_server, account_login, symbol, &side, normalized_volume, request.stop_loss_price) {
                                     Ok(rechecked) => {
-                                        match correlated_preflight_inventory(&bridge, &rechecked, broker_server, account_login, symbol) {
+                                        match correlated_preflight_inventory(&bridge, rechecked, broker_server, account_login, symbol) {
                                             Err(error) => reasons.push(format!("Corrected-volume calculation could not be bound to a complete account inventory: {error}")),
                                             Ok(correlated_again) => {
                                                 snapshot = correlated_again.snapshot;
@@ -573,7 +572,7 @@ pub fn calculate(
     // before this object is serialized. Bind the returned decision to the exact latest
     // frame and evaluate freshness at completion, not at function entry.
     let completed_at_ms = chrono::Utc::now().timestamp_millis();
-    quote_age = completed_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
+    let quote_age = completed_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
     if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) {
         reasons.push("The MT5 quote became future-dated or stale while risk sizing was being finalized; refresh and retry.".into());
     }
@@ -685,7 +684,7 @@ fn correlated_preflight_inventory(
         return Err("the correlated telemetry frame belongs to a different account, symbol, or disconnected terminal".into());
     }
     let now = chrono::Utc::now().timestamp_millis();
-    let quote_age = quote_age_within_window(now, snapshot.symbol.quote_time_ms)
+    quote_age_within_window(now, snapshot.symbol.quote_time_ms)
         .ok_or_else(|| "the quote in the correlated telemetry frame is future-dated or older than sixty seconds".to_string())?;
     if preflight.symbol != symbol || !preflight.success {
         return Err("the native terminal result did not succeed for the requested symbol".into());
