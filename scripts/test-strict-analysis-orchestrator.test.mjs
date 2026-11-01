@@ -94,6 +94,22 @@ test('completion barrier processes the full inventory but blocks on every catalo
   assert.equal(Object.keys(result.coverage.byCategory).length, 9);
 });
 
+test('completion diagnostics treat SHA-256 hex case as the same snapshot identity', () => {
+  const workPlan = plan();
+  const assessments = assessmentsFor(workPlan).map((assessment) => assessment.status === 'evaluated'
+    ? { ...assessment, dataSnapshotId: assessment.dataSnapshotId.toUpperCase() }
+    : assessment);
+  const result = evaluateStrictAnalysisCompletion({
+    workPlan,
+    assessments,
+    marketData: marketDataFor(workPlan),
+    risk: { passed: true },
+    intent: 'research',
+  });
+  assert.equal(result.allowed, false);
+  assert.ok(!result.reasons.some((reason) => reason.includes('dataSnapshotId does not match the work-plan snapshot')));
+});
+
 test('completion barrier blocks snapshot mismatch and specialist identity tampering', () => {
   const workPlan = plan();
   const assessments = assessmentsFor(workPlan);
