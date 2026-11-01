@@ -56,7 +56,7 @@ const requiredFiles = [
 ];
 for (const item of requiredFiles) read(item);
 const workflow = read('.github/workflows/ci.yml');
-requireText(workflow, 'npm run typecheck:layers', 'Frontend CI typecheck gate');
+requireText(workflow, 'bun run typecheck:layers', 'Frontend CI typecheck gate');
 requireText(workflow, 'bun test api/test/app.integration.test.ts', 'Bun/Hono HTTP integration CI gate');
 
 const packageJson = parseJson('package.json');
