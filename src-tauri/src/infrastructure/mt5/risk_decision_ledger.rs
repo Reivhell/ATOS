@@ -244,6 +244,27 @@ pub(crate) fn initialize(connection: &Connection) -> Result<(), String> {
             "MT5 risk-decision ledger schema version {version} requires an explicit migration."
         ));
     }
+    verify_immutability_triggers(connection)?;
+    Ok(())
+}
+
+fn verify_immutability_triggers(connection: &Connection) -> Result<(), String> {
+    const REQUIRED_TRIGGERS: [(&str, &str); 2] = [
+        ("trg_mt5_risk_decision_events_no_update", "CREATE TRIGGER trg_mt5_risk_decision_events_no_update BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(ABORT, 'MT5 risk-decision ledger is append-only'); END"),
+        ("trg_mt5_risk_decision_events_no_delete", "CREATE TRIGGER trg_mt5_risk_decision_events_no_delete BEFORE DELETE ON mt5_risk_decision_events BEGIN SELECT RAISE(ABORT, 'MT5 risk-decision ledger is append-only'); END"),
+    ];
+    for (name, required_sql) in REQUIRED_TRIGGERS {
+        let sql: Option<String> = connection
+            .query_row("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?1", [name], |row| row.get(0))
+            .map_err(|error| format!("Cannot inspect MT5 risk-decision ledger guard {name}: {error}"))?;
+        let Some(sql) = sql else {
+            return Err(format!("MT5 risk-decision ledger guard {name} is missing; writes are disabled."));
+        };
+        let normalize_sql = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_uppercase();
+        if normalize_sql(&sql) != normalize_sql(required_sql) {
+            return Err(format!("MT5 risk-decision ledger guard {name} differs from the required append-only policy; writes are disabled."));
+        }
+    }
     Ok(())
 }
 
@@ -929,6 +950,15 @@ mod tests {
         assert!(append(&path, &record).is_err());
         let status = status(&path, "Broker-Live", "12345").unwrap();
         assert_eq!(status.event_count, 0);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn weakened_immutability_trigger_fails_closed_on_reopen() {
+        let path = initialized_path();
+        let connection = Connection::open(&path).unwrap();
+        connection.execute_batch("DROP TRIGGER trg_mt5_risk_decision_events_no_update; CREATE TRIGGER trg_mt5_risk_decision_events_no_update BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(IGNORE); END;").unwrap();
+        assert!(initialize(&connection).unwrap_err().contains("differs from the required append-only policy"));
         let _ = std::fs::remove_file(path);
     }
 
