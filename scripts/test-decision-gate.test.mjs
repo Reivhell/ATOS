@@ -142,6 +142,18 @@ test('unvalidated market data or failed risk gateway blocks handoff', () => {
   assert.ok(result.reasons.some((reason) => reason.includes('Risk gateway')));
 });
 
+test('market source labels must match the trusted native Binance provider', () => {
+  const input = validInput();
+  for (const source of ['', 'test-fixture', 'Binance-like proxy', 'MT5 terminal']) {
+    input.marketData.source = source;
+    const result = evaluateStrictDecisionGate(input);
+    assert.ok(result.reasons.some((reason) => reason.includes('trusted Rust-owned Binance public REST provenance')), `untrusted source accepted: ${source}`);
+  }
+  input.marketData.source = 'Binance public REST';
+  const result = evaluateStrictDecisionGate(input);
+  assert.ok(!result.reasons.some((reason) => reason.includes('trusted Rust-owned Binance public REST provenance')));
+});
+
 test('intent must be explicit and live execution is never authorized', () => {
   const input = validInput(); input.intent = 'live_trade';
   const result = evaluateStrictDecisionGate(input);
