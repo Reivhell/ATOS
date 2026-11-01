@@ -1967,7 +1967,7 @@ fn evidence_ref_resolves_to_market_snapshot(
     if source != "binance"
         || !valid_sha256(snapshot_digest)
         || !snapshot_digest.eq_ignore_ascii_case(&market.dataset_sha256)
-        || !market.source.starts_with("Binance public REST")
+        || !(market.source == "Binance public REST" || market.source.starts_with("Binance public REST · "))
     {
         return false;
     }
