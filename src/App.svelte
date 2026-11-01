@@ -266,10 +266,15 @@
       const preferredSeries = availableSeries.find((series) => series.symbol === activeCandleRequest.symbol && series.interval === activeCandleRequest.interval) ?? availableSeries[0];
       if (preferredSeries) await loadChartSeries({ symbol: preferredSeries.symbol, interval: preferredSeries.interval });
       else {
+        chartRequestEpoch += 1;
+        indicatorRequestEpoch += 1;
         chartSeriesResponse = null;
+        technicalReadings = [];
         chartSeriesError = 'No validated candle series is currently available. Refresh market data or inspect provider status.';
       }
     } catch (error) {
+      chartRequestEpoch += 1;
+      indicatorRequestEpoch += 1;
       errorMessage = toMessage(error);
       chartSeriesResponse = null;
       technicalReadings = [];
