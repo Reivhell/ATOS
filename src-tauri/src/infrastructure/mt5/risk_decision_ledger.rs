@@ -882,6 +882,57 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_pending_intent_requires_manual_recovery_when_database_is_at_old_head() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 2,
+            head_sha256: "a".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 2,
+            head_sha256: "a".repeat(64),
+            pending: Some(PendingCheckpoint {
+                event_count: 3,
+                head_sha256: "b".repeat(64),
+            }),
+        };
+        assert!(!checkpoint_matches(&status, &checkpoint));
+        let pending = checkpoint.pending.as_ref().unwrap();
+        assert_eq!(pending.event_count, status.event_count + 1);
+        assert_ne!(pending.head_sha256, status.head_sha256);
+    }
+
+    #[test]
+    fn checkpoint_pending_intent_matches_committed_database_head() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 3,
+            head_sha256: "b".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 2,
+            head_sha256: "a".repeat(64),
+            pending: Some(PendingCheckpoint {
+                event_count: 3,
+                head_sha256: "b".repeat(64),
+            }),
+        };
+        let pending = checkpoint.pending.as_ref().unwrap();
+        assert_eq!(status.event_count, pending.event_count);
+        assert_eq!(status.head_sha256, pending.head_sha256);
+    }
+
+    #[test]
     fn external_checkpoint_detects_deleted_tail_and_missing_history() {
         let status = Mt5RiskDecisionLedgerStatus {
             valid: true,
