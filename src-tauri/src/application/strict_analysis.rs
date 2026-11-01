@@ -1980,10 +1980,13 @@ fn evidence_ref_resolves_to_market_snapshot(
     if !symbol.eq_ignore_ascii_case(&market.symbol) || timeframe != market.timeframe {
         return false;
     }
-    let Ok(timestamp) = timestamp.parse::<i64>() else {
+    let Ok(timestamp_ms) = timestamp.parse::<i64>() else {
         return false;
     };
-    market.candles.iter().any(|candle| candle.time == timestamp)
+    if timestamp_ms.to_string() != timestamp {
+        return false;
+    }
+    market.candles.iter().any(|candle| candle.time == timestamp_ms)
 }
 
 fn has_registered_evidence_refs(refs: &[String], market: &StrictMarketDataContext) -> bool {
