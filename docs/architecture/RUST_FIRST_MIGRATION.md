@@ -24,7 +24,7 @@ Rust is the source of truth for deterministic business behavior. The long-term t
 
 ## Current gap
 
-The current `dev` branch still runs technical indicators, structure detectors, and research-decision evaluation from JavaScript modules under `src/lib`. The Rust core already owns important stateful and risk-sensitive workflows, but that does not make the overall 80/20 target true. The existing frontend layer typecheck only checks a selected subset and is not proof that the Rust migration is complete.
+The first migration slice now calculates the six user-visible SMA, EMA, RSI, MACD, ATR, and Bollinger readings in `src-tauri/src/domain/technical_analysis.rs`; the Svelte view requests those readings through a typed Tauri command. Native tests cover valid data, insufficient history, malformed OHLCV, timestamp order, arithmetic overflow, and oversized input. The legacy JavaScript indicator implementation still runs inside the research-analysis engine and the application service still computes its compatibility reading array, so duplicate calculations and core decision logic remain to be migrated. This slice does not establish the 80/20 target.
 
 ## Completion criteria
 
