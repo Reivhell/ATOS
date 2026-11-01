@@ -1986,7 +1986,7 @@ fn evidence_ref_resolves_to_market_snapshot(
     if timestamp_ms.to_string() != timestamp {
         return false;
     }
-    market.candles.iter().any(|candle| candle.time == timestamp_ms)
+    market.candles.iter().filter(|candle| candle.time == timestamp_ms).count() == 1
 }
 
 fn has_registered_evidence_refs(refs: &[String], market: &StrictMarketDataContext) -> bool {
