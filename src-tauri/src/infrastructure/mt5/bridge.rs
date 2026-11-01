@@ -38,10 +38,6 @@ const MAX_PENDING_ORDERS: usize = 200;
 const ORDER_STATE_STARTED: i64 = 0;
 const ORDER_STATE_PLACED: i64 = 1;
 const ORDER_STATE_PARTIAL: i64 = 3;
-const ORDER_STATE_CANCELED: i64 = 2;
-const ORDER_STATE_FILLED: i64 = 4;
-const ORDER_STATE_REJECTED: i64 = 5;
-const ORDER_STATE_EXPIRED: i64 = 6;
 const ORDER_STATE_REQUEST_ADD: i64 = 7;
 const ORDER_STATE_REQUEST_MODIFY: i64 = 8;
 const ORDER_STATE_REQUEST_CANCEL: i64 = 9;
@@ -420,9 +416,9 @@ impl Mt5Bridge {
         };
         let age = last_heartbeat_at_ms.map(|timestamp| now.saturating_sub(timestamp));
         let fresh = age.is_some_and(|value| (0..=HEARTBEAT_STALE_AFTER_MS).contains(&value));
-        let quote_stale = snapshot.as_ref().map_or(true, |current| {
+        let quote_stale = snapshot.as_ref().is_none_or(|current| {
             let quote_age = now.saturating_sub(current.symbol.quote_time_ms);
-            quote_age < 0 || quote_age > 60_000
+            !(0..=60_000).contains(&quote_age)
         });
         let connected = connected_state && fresh;
         Mt5BridgeStatus {
@@ -1240,7 +1236,7 @@ fn validate_market_data_scope(
     for schedule in session_schedules {
         crate::infrastructure::mt5::market_data::validate_session_schedule(schedule)?;
         let age_ms = frame_sent_at_ms.saturating_sub(schedule.captured_at_ms);
-        if age_ms < 0 || age_ms > MAX_SESSION_CALENDAR_AGE_MS {
+        if !(0..=MAX_SESSION_CALENDAR_AGE_MS).contains(&age_ms) {
             return Err("MT5 broker session calendar is future-dated or older than the one-hour freshness ceiling.".into());
         }
     }
