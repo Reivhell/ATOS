@@ -139,5 +139,5 @@ test('authenticated account identity and series scope are enforced before market
   assert.match(native, /tick\.symbol\.as_str\(\)/);
   assert.match(native, /bar\.timeframe\.as_str\(\)/);
   assert.match(native, /frame_scope_binds_account_and_market_data_to_authenticated_subscriptions/);
-  assert.match(native, /validate_market_data_scope\(\s*&auth\.account_login/);
+  assert.match(native, /validate_market_data_scope\(AuthenticatedMarketDataScope \{/);
 });
