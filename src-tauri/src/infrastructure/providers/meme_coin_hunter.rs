@@ -994,7 +994,6 @@ fn assess_security(
         {
             flags.push("Custom transfer hook is configured and requires manual review".into());
             mandatory_known = false;
-            review_required = true;
         }
         holder_top10_pct = percent_from_holder_array(
             data.get("holders"),
@@ -1876,7 +1875,7 @@ pub async fn run_scan(data_dir: PathBuf) -> Result<MemeCoinHunterReport, String>
     if let Some(token) = security_token.as_ref() {
         let addresses_by_chain = pairs_by_token.iter().fold(
             BTreeMap::<String, Vec<String>>::new(),
-            |mut groups, (key, pair)| {
+            |mut groups, (key, _pair)| {
                 let chain = key.split(':').next().unwrap_or_default();
                 let address = discovered
                     .get(key)
@@ -1905,7 +1904,7 @@ pub async fn run_scan(data_dir: PathBuf) -> Result<MemeCoinHunterReport, String>
                     )
                 }
             });
-        for (chain, result) in join_all(security_requests).await {
+        for (_chain, result) in join_all(security_requests).await {
             match result {
                 Ok((chain, result)) => {
                     security_by_chain.insert(chain, result);
