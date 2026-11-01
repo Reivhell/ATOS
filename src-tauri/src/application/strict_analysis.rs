@@ -1932,8 +1932,10 @@ fn canonical_evidence_ref_matches_snapshot(reference: &str, snapshot_sha256: &st
                 byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/' | b'~')
             })
     };
-    valid_token(source)
-        && valid_token(locator)
+    matches!(
+        source,
+        "binance" | "mt5" | "rust-indicator" | "rust-structure" | "backtest" | "fixture"
+    ) && valid_token(locator)
         && !locator.contains("..")
 }
 
@@ -3203,6 +3205,10 @@ mod tests {
         ));
         assert!(!canonical_evidence_ref_matches_snapshot(
             "test:arbitrary-claim",
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:agent:assertion"),
             &digest
         ));
         assert!(!canonical_evidence_ref_matches_snapshot(
