@@ -2465,8 +2465,8 @@ where
     if !market.validated {
         reasons.push("Market data has not passed the validated-data contract.".into());
     }
-    if market.source.trim().is_empty() {
-        reasons.push("Market-data source provenance is missing.".into());
+    if !market.source.starts_with("Binance public REST") {
+        reasons.push("Strict completion requires trusted Rust-owned Binance public REST provenance.".into());
     }
     if !valid_timestamp(&market.as_of) {
         reasons.push("Market-data timestamp is missing or invalid.".into());
