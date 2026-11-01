@@ -253,6 +253,10 @@ test('evidence references must bind to the exact snapshot and use canonical safe
   result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:agent:assertion`] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+
   input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:../private`] };
   result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
