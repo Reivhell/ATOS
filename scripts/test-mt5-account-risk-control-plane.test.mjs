@@ -146,6 +146,9 @@ test('frontend exposes account-wide inventory, broker stop-out policy and pendin
   assert.match(panel, /Stressed margin level/);
   assert.match(panel, /No active pending orders/);
   assert.match(panel, /riskSizingResultStale/);
+  assert.match(panel, /status\.accountServer !== riskSizingResult\.brokerServer/);
+  assert.match(panel, /status\.accountLogin !== riskSizingResult\.accountLogin/);
+  assert.match(panel, /seriesSymbol\.trim\(\) !== riskSizingResult\.symbol/);
   assert.match(panel, /STALE — RE-CALCULATE/);
   assert.match(panel, /Snapshot superseded/);
 });
