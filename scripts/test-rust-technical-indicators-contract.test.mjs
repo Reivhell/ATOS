@@ -50,7 +50,7 @@ test('strict evidence references are snapshot-bound, bounded, and fail closed in
   const strictRust = read('../src-tauri/src/application/strict_analysis.rs');
   const schema = read('../docs/agents/strict-ta-assessment.schema.json');
   assert.match(strictGate, /function canonicalEvidenceRefMatchesSnapshot/);
-  assert.match(strictGate, /binance\\|mt5\\|rust-indicator\\|rust-structure\\|backtest/);
+  assert.match(strictGate, /binance\|mt5\|rust-indicator\|rust-structure\|backtest/);
   assert.doesNotMatch(strictGate, /backtest\|fixture/);
   assert.match(strictGate, /refs\.length <= 32/);
   assert.match(strictGate, /ref\.length <= 256/);
@@ -62,7 +62,7 @@ test('strict evidence references are snapshot-bound, bounded, and fail closed in
   assert.match(schema, /"maxLength": 256/);
   assert.match(schema, /backtest.*A-Za-z0-9_~/);
   assert.doesNotMatch(schema, /backtest\|fixture/);
-  assert.match(strictRust, /segment\.is_empty\(\) && !segment\.starts_with\('\.'\)/);
+  assert.match(strictRust, /!segment\.is_empty\(\) && !segment\.starts_with\('\.'\)/);
 });
 
 test('Rust generates bounded indicator-domain signals through the native application boundary', () => {
