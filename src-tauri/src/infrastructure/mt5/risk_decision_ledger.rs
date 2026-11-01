@@ -657,6 +657,7 @@ pub(crate) fn append(
         )
         .map_err(|error| format!("Risk-decision event could not be appended: {error}"))?;
     #[cfg(not(test))]
+    // Advance the protected head before commit so a crash can only cause a detectable mismatch.
     write_checkpoint(
         &record.broker_server,
         &record.account_login,
