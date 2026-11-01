@@ -326,7 +326,12 @@ pub fn run_walk_forward_parameter_tournament(
             let replace =
                 selected.is_none_or(|(best_fast, best_slow, best_sharpe, best_drawdown)| {
                     compare_tournament_candidate_priority(
-                        (training_result.sharpe_ratio, training_result.max_drawdown_pct.abs(), *fast, *slow),
+                        (
+                            training_result.sharpe_ratio,
+                            training_result.max_drawdown_pct.abs(),
+                            *fast,
+                            *slow,
+                        ),
                         (best_sharpe, best_drawdown, best_fast, best_slow),
                     )
                     .is_lt()
