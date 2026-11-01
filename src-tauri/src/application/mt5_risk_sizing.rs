@@ -157,8 +157,8 @@ pub fn calculate(
         return Err("MT5 heartbeat is outside the risk-sizing freshness window.".into());
     }
     quote_age_within_window(now, snapshot.symbol.quote_time_ms).ok_or_else(|| {
-            "MT5 quote timestamp is future-dated or older than 60 seconds.".to_string()
-        })?;
+        "MT5 quote timestamp is future-dated or older than 60 seconds.".to_string()
+    })?;
     if snapshot.symbol.name != symbol {
         return Err("Requested symbol does not match the live terminal quote symbol. Select that symbol in MT5 and wait for a fresh bridge frame.".into());
     }
