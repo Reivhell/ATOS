@@ -206,7 +206,7 @@ pub fn run_walk_forward_parameter_tournament(
     source: &str,
     requested_folds: usize,
 ) -> Result<StrategyParameterTournament, String> {
-    if requested_folds < 2 || requested_folds > TOURNAMENT_MAX_FOLDS {
+    if !(2..=TOURNAMENT_MAX_FOLDS).contains(&requested_folds) {
         return Err(format!(
             "Walk-forward tournament requires 2 to {TOURNAMENT_MAX_FOLDS} folds."
         ));
@@ -1534,8 +1534,8 @@ mod tests {
             close: 11.0,
             volume: 42.0,
         };
-        let baseline = dataset_sha256(&[candle.clone()]);
-        assert_eq!(baseline, dataset_sha256(&[candle.clone()]));
+        let baseline = dataset_sha256(std::slice::from_ref(&candle));
+        assert_eq!(baseline, dataset_sha256(std::slice::from_ref(&candle)));
         let changed_time = Candle {
             time: 11,
             ..candle.clone()
