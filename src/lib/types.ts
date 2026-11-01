@@ -1,3 +1,11 @@
+export interface TechnicalIndicatorReading {
+  key: string;
+  title: string;
+  value: string;
+  detail: string;
+  available: boolean;
+}
+
 export interface Candle {
   time: number;
   open: number;
