@@ -8,12 +8,12 @@
     Sparkles, Square, Terminal, TrendingDown, TrendingUp, Wallet, X, Zap, BookOpen, Layers3,
   } from 'lucide-svelte';
   import {
-    calculateNativeMarketStructure, calculateTechnicalIndicatorReadings, getAuditHistory, getCandleSeries, getDashboardState, isDesktopRuntime, placePaperOrder, refreshMarketData, refreshMemeScreener, resetPaperAccount,
+    calculateNativeIndicatorSignals, calculateNativeMarketStructure, calculateTechnicalIndicatorReadings, getAuditHistory, getCandleSeries, getDashboardState, isDesktopRuntime, placePaperOrder, refreshMarketData, refreshMemeScreener, resetPaperAccount,
     runBacktest, setAgentRunning, setKillSwitch, updateRiskLimits,
     createResearchHypothesis, invalidateResearchHypothesis, executeResearchWorkflow, getResearchRunCard, listResearchHypotheses,
     listResearchRunCards, verifyResearchWorkspace,
   } from './lib/adapters/tauri/bridge';
-  import type { Agent, AuditEvent, BacktestRequest, BacktestResult, Candle, CandleSeriesRequest, ValidatedCandleSeriesSnapshot, DashboardSnapshot, PaperOrder, Quote, ScreenerToken, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, TechnicalIndicatorReading, NativeStructureSnapshot } from './lib/types';
+  import type { Agent, AuditEvent, BacktestRequest, BacktestResult, Candle, CandleSeriesRequest, ValidatedCandleSeriesSnapshot, DashboardSnapshot, PaperOrder, Quote, ScreenerToken, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, TechnicalIndicatorReading, NativeIndicatorSignalSnapshot, NativeStructureSnapshot } from './lib/types';
   import { auditEventsToCsv, backtestReportToJson } from './lib/infrastructure/serialization/exports.js';
   import { TECHNICAL_ANALYSIS_CATALOG, TECHNICAL_ANALYSIS_CATEGORIES, TECHNICAL_ANALYSIS_MASTER_LIST_VERSION } from './lib/domain/technical-analysis/catalog.js';
   import { createTechnicalAnalysisReport } from './lib/application/technical-analysis-service.js';
@@ -52,6 +52,7 @@
   let chartSeriesResponse: ValidatedCandleSeriesSnapshot | null = null;
   let technicalReadings: TechnicalIndicatorReading[] = [];
   let nativeStructure: NativeStructureSnapshot | null = null;
+  let nativeIndicatorSignals: NativeIndicatorSignalSnapshot | null = null;
   let indicatorRequestEpoch = 0;
   let chartSeriesBusy = false;
   let chartSeriesError = '';
@@ -272,6 +273,9 @@
         chartSeriesResponse = null;
         technicalReadings = [];
         nativeStructure = null;
+    nativeIndicatorSignals = null;
+      nativeIndicatorSignals = null;
+        nativeIndicatorSignals = null;
         chartSeriesError = 'No validated candle series is currently available. Refresh market data or inspect provider status.';
       }
     } catch (error) {
@@ -319,9 +323,10 @@
       nativeStructure = null;
       return;
     }
-    const [indicatorResult, structureResult] = await Promise.allSettled([
+    const [indicatorResult, structureResult, signalResult] = await Promise.allSettled([
       calculateTechnicalIndicatorReadings(series.candles),
       calculateNativeMarketStructure(series.candles),
+      calculateNativeIndicatorSignals(series.candles),
     ]);
     if (requestEpoch !== indicatorRequestEpoch) return;
     if (indicatorResult.status === 'fulfilled') {
@@ -336,6 +341,7 @@
       }));
     }
     nativeStructure = structureResult.status === 'fulfilled' ? structureResult.value : null;
+    nativeIndicatorSignals = signalResult.status === 'fulfilled' ? signalResult.value : null;
   }
 
   async function openCandleSeries(series: { symbol: string; interval: CandleSeriesRequest['interval'] }) {
@@ -985,6 +991,7 @@
                 <div><small>Research verdict</small><strong>{technicalEnvelope.decision.decision.replaceAll('_', ' ')}</strong></div>
               </div>
               <div class="table-footnote"><strong>Structure:</strong> {#if nativeStructure}{nativeStructure.bias} · {nativeStructure.pivots.length} Rust-confirmed pivots · {nativeStructure.breaks.length} Rust close-confirmed breaks.{:else}Rust structure analysis unavailable; no native result is being substituted.{/if}</div>
+              <div class="table-footnote"><strong>Rust indicator signals:</strong> {#if nativeIndicatorSignals}{#each nativeIndicatorSignals.signals as signal, index}{index > 0 ? ' · ' : ''}{signal.domain}: {signal.direction} ({signal.signalStrength.toFixed(2)}){/each}{:else}Native signal snapshot unavailable; these signals are not used to approve a research decision.{/if}</div>
               <div class="table-footnote"><strong>Temporal & anomaly audit:</strong> {technicalEnvelope.dataQuality.audit.status.toUpperCase()} · {technicalEnvelope.dataQuality.audit.hardIssues.length} integrity fault(s) · {technicalEnvelope.dataQuality.audit.warnings.length} advisory warning(s). Latest-bar warnings are review prompts, not proof of bad data; candidate handoff stays blocked while warnings remain.</div>
               {#if technicalEnvelope.dataQuality.issues.length}
                 <div class="warnings-list">{#each technicalEnvelope.dataQuality.issues.slice(0, 3) as issue}<div><ShieldAlert size={14}/><span>{issue}</span></div>{/each}</div>
