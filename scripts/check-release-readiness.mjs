@@ -76,7 +76,7 @@ for (const executable of ['svelte-check', 'vite', 'tauri']) {
   const candidates = windows
     ? [`node_modules/.bin/${executable}.cmd`, `node_modules/.bin/${executable}.exe`]
     : [`node_modules/.bin/${executable}`];
-  if (!candidates.some(present)) addFailure(`Required installed build executable is missing: ${executable} (run npm ci first)`);
+  if (!candidates.some(present)) addFailure(`Required installed build executable is missing: ${executable} (run bun install --frozen-lockfile first)`);
   else checks.push(`installed frontend executable: ${executable}`);
 }
 for (const [command, args] of [
@@ -93,7 +93,7 @@ if (!packageJson?.scripts?.build || !packageJson?.scripts?.test || !packageJson?
 if (!packageJson?.scripts?.['eval:agents'] || !present('scripts/agent-release-evaluation.mjs') || !present('scripts/test-agent-release-evaluation.test.mjs')) {
   addFailure('Integrated AI Agent release qualification command or tests are missing');
 } else {
-  const result = spawnSync(process.execPath, ['scripts/agent-release-evaluation.mjs'], { cwd: root, encoding: 'utf8', timeout: 30_000, windowsHide: true });
+  const result = spawnSync('bun', ['run', 'scripts/agent-release-evaluation.mjs'], { cwd: root, encoding: 'utf8', timeout: 30_000, windowsHide: true });
   if (result.error || result.status !== 0) addFailure('AI Agent release qualification gate failed; inspect bun run eval:agents output');
   else checks.push('AI Agent release qualification gate passed against the application boundary');
 }
