@@ -34,7 +34,7 @@ const assessmentFor = (item, status, extra = {}) => ({
 const goodAssessment = (item) => item.availability === 'Catalog only'
   ? assessmentFor(item, 'unsupported', { reason: 'Reviewed detector implementation is not available yet.' })
   : assessmentFor(item, 'evaluated', {
-      evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(item)}`],
+      evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:catalog-${catalog.indexOf(item)}`],
       result: { value: 'fixture-only' },
       lookAheadSafe: true,
       implementationVersion: REVIEWED_IMPLEMENTATION_VERSION_BY_CATALOG_ID[item.id] ?? 'unregistered-test-version',
@@ -77,7 +77,7 @@ test('missing one assessment blocks handoff', () => {
 test('caller cannot self-promote catalog-only concepts by changing payload availability', () => {
   const input = validInput();
   input.catalog = catalog.map((item) => ({ ...item, availability: 'Calculated now' }));
-  input.assessments = catalog.map((item) => assessmentFor(item, 'evaluated', { evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(item)}`], result: {}, lookAheadSafe: true, implementationVersion: 'agent-assertion', dataSnapshotId: 'agent-assertion' }));
+  input.assessments = catalog.map((item) => assessmentFor(item, 'evaluated', { evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:catalog-${catalog.indexOf(item)}`], result: {}, lookAheadSafe: true, implementationVersion: 'agent-assertion', dataSnapshotId: 'agent-assertion' }));
   const result = evaluateStrictDecisionGate(input);
   assert.equal(result.allowed, false);
   assert.ok(result.reasons.some((reason) => reason.includes('code-owned Strict Master List')));
@@ -87,7 +87,7 @@ test('caller cannot self-promote catalog-only concepts by changing payload avail
 test('catalog-only concept cannot be marked evaluated even when assessment has evidence', () => {
   const input = validInput();
   const index = catalog.findIndex((item) => item.availability === 'Catalog only');
-  input.assessments[index] = assessmentFor(catalog[index], 'evaluated', { evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${index}`], result: {}, lookAheadSafe: true, implementationVersion: 'test', dataSnapshotId: 'fixture' });
+  input.assessments[index] = assessmentFor(catalog[index], 'evaluated', { evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:catalog-${index}`], result: {}, lookAheadSafe: true, implementationVersion: 'test', dataSnapshotId: 'fixture' });
   const result = evaluateStrictDecisionGate(input);
   assert.equal(result.allowed, false);
   assert.ok(result.reasons.some((reason) => reason.includes('must remain unsupported')));
@@ -194,7 +194,7 @@ test('assessment snapshot digest must be valid SHA-256 and compare independently
   uppercase.assessments[evaluatedIndex] = {
     ...uppercase.assessments[evaluatedIndex],
     dataSnapshotId: 'A'.repeat(64),
-    evidenceRefs: [`snapshot:${'A'.repeat(64)}:fixture:catalog-${catalog.indexOf(catalog.find((item) => item.id === uppercase.assessments[evaluatedIndex].catalogId))}`],
+    evidenceRefs: [`snapshot:${'A'.repeat(64)}:binance:catalog-${catalog.indexOf(catalog.find((item) => item.id === uppercase.assessments[evaluatedIndex].catalogId))}`],
   };
   result = evaluateStrictDecisionGate(uppercase);
   assert.ok(!result.reasons.some((reason) => reason.includes('does not match the validated market-data dataset')));
@@ -220,7 +220,7 @@ test('assessment timestamp must match the exact snapshot cutoff and evidence ref
 
   const second = validInput();
   const evaluated = second.assessments.find((entry) => entry.status === 'evaluated');
-  evaluated.evidenceRefs = [`snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(catalog.find((entry) => entry.id === evaluated.catalogId))}`, `snapshot:${'a'.repeat(64)}:fixture:catalog-${catalog.indexOf(catalog.find((entry) => entry.id === evaluated.catalogId))}`];
+  evaluated.evidenceRefs = [`snapshot:${'a'.repeat(64)}:binance:catalog-${catalog.indexOf(catalog.find((entry) => entry.id === evaluated.catalogId))}`, `snapshot:${'a'.repeat(64)}:binance:catalog-${catalog.indexOf(catalog.find((entry) => entry.id === evaluated.catalogId))}`];
   const duplicateEvidence = evaluateStrictDecisionGate(second);
   assert.equal(duplicateEvidence.allowed, false);
   assert.ok(duplicateEvidence.reasons.some((reason) => reason.includes('evidence references')));
@@ -231,11 +231,11 @@ test('evidence references enforce count and length bounds', () => {
   const input = validInput();
   const index = input.assessments.findIndex((entry) => entry.status === 'evaluated');
   const original = input.assessments[index];
-  input.assessments[index] = { ...original, evidenceRefs: Array.from({ length: 33 }, (_, i) => `snapshot:${'a'.repeat(64)}:fixture:catalog-${i}`) };
+  input.assessments[index] = { ...original, evidenceRefs: Array.from({ length: 33 }, (_, i) => `snapshot:${'a'.repeat(64)}:binance:catalog-${i}`) };
   let result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 
-  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:${'x'.repeat(257)}`] };
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:${'x'.repeat(257)}`] };
   result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 });
@@ -254,10 +254,13 @@ test('evidence references must bind to the exact snapshot and use canonical safe
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 
   input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:agent:assertion`] };
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:catalog-${index}`] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical, and bound')));
   result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 
-  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:fixture:../private`] };
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:../private`] };
   result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 });
