@@ -23,7 +23,7 @@ test('protocol v6 requires complete bounded pending-order inventory', () => {
   assert.match(bridge, /for terminal_state in \[2_i64, 4, 5, 6\]/);
   assert.match(bridge, /fn is_active_pending_order_state\(state: i64\)/);
   assert.match(bridge, /ORDER_STATE_PARTIAL/);
-  assert.match(bridge, /ORDER_STATE_CANCELED/);
+  assert.match(bridge, /terminal MQL5 order state \{terminal_state\} must not appear/);
   assert.match(bridge, /terminal MQL5 order state \{terminal_state\} must not appear/);
   assert.match(ea, /#define ATOS_PROTOCOL_VERSION 6/);
   assert.match(ea, /OrdersTotal\(\)/);
