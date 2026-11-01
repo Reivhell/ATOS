@@ -29,6 +29,8 @@ use std::{
 };
 use uuid::Uuid;
 
+type ResearchHypothesisRow = (String, String, String, String, String, String, i64, i64, i64);
+
 const WORKSPACE_SCHEMA_VERSION: i64 = 1;
 const ZERO_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_HYPOTHESIS_TITLE_CHARS: usize = 160;
@@ -1113,17 +1115,7 @@ impl ResearchWorkspace {
     }
 
     fn verify_hypotheses(connection: &Connection) -> Result<u64, String> {
-        let rows: Vec<(
-            String,
-            String,
-            String,
-            String,
-            String,
-            String,
-            i64,
-            i64,
-            i64,
-        )> = {
+        let rows: Vec<ResearchHypothesisRow> = {
             let mut statement = connection.prepare(
                 "SELECT id,title,thesis,symbol,interval,status,revision,created_at_ms,updated_at_ms
                  FROM research_hypotheses ORDER BY id ASC",
@@ -1587,17 +1579,7 @@ impl ResearchWorkspace {
         connection: &Connection,
         hypothesis_id: &str,
     ) -> Result<Option<ResearchHypothesis>, String> {
-        let row: Option<(
-            String,
-            String,
-            String,
-            String,
-            String,
-            String,
-            i64,
-            i64,
-            i64,
-        )> = connection
+        let row: Option<ResearchHypothesisRow> = connection
             .query_row(
                 "SELECT id,title,thesis,symbol,interval,status,revision,created_at_ms,updated_at_ms
              FROM research_hypotheses WHERE id=?1",
