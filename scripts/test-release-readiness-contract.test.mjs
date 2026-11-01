@@ -22,6 +22,7 @@ test('release readiness validates each invariant in the source module that owns 
   assert.match(readiness, /reviewed full 40-character commit SHAs/);
   assert.match(readiness, /releaseTagVersionError/);
   assert.match(readiness, /\['bun', \['--version'\]\]/);
+  assert.match(readiness, /spawnSync\('bun', \['run', 'scripts\/agent-release-evaluation\.mjs'\]/);
   assert.match(versionPolicy, /Release tag v\$\{tagVersion\} does not match application manifest version/);
 });
 
