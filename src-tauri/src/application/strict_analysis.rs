@@ -678,9 +678,9 @@ fn verify_audit_chain_connection(connection: &Connection) -> Result<(usize, i64,
                     plan_sha256: plan_sha.to_string(),
                     started_at_ms: *started,
                     completed_at_ms: *completed,
-                    status: status.clone(),
-                    decision: decision.clone(),
-                    receipt_sha256: receipt.clone(),
+                    status: status.to_string(),
+                    decision: decision.as_deref().map(str::to_string),
+                    receipt_sha256: receipt.as_deref().map(str::to_string),
                     assessment_bundle_sha256: bundle
                         .as_deref()
                         .map(|value| sha256_bytes(value.as_bytes())),
@@ -1212,9 +1212,9 @@ fn open_strict_store(path: &Path) -> Result<Connection, String> {
                     plan_sha256: plan_sha.to_string(),
                     started_at_ms: *started,
                     completed_at_ms: *completed,
-                    status: status.clone(),
-                    decision: decision.clone(),
-                    receipt_sha256: receipt.clone(),
+                    status: status.to_string(),
+                    decision: decision.as_deref().map(str::to_string),
+                    receipt_sha256: receipt.as_deref().map(str::to_string),
                     assessment_bundle_sha256: bundle
                         .as_deref()
                         .map(|value| sha256_bytes(value.as_bytes())),
