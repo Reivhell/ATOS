@@ -58,7 +58,7 @@ test('Native Tauri boundary does not trust UI-supplied data or risk approvals', 
   assert.match(rustLib, /pub\(crate\) fn authoritative_strict_series\(/);
   assert.match(rustLib, /series\.is_live/);
   assert.match(rustLib, /series\.provider_status\.starts_with\("CONNECTED"\)/);
-  assert.match(rustLib, /series\.source\.starts_with\("Binance public REST"\)/);
+  assert.match(rustLib, /series\.source == "Binance public REST" \|\| series\.source\.starts_with\("Binance public REST · "\)/);
   assert.match(rustLib, /Strict analysis requires a fresh connected Rust-owned Binance public-data snapshot/);
   assert.match(rustGate, /Strict completion requires trusted Rust-owned Binance public REST provenance/);
   assert.match(commands, /request\.market_data = strict_analysis::StrictMarketDataContext/);
