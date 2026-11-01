@@ -4,10 +4,10 @@
 **Repository:** `Reivhell/ATOS`  
 **Base branch:** `main`  
 **Working branch:** `migration/bun-runtime-primary`  
-**Sprint completion:** **60%**  
+**Sprint completion:** **70%**  
 **Status:** Runtime command migration and CI/release wiring updated; CI verification pending.
 
-## Current state verified on `main`
+## Baseline verified on `main` before migration
 
 - The optional local research API already uses Bun and Hono. The package scripts include `dev:api` and `start:api` with Bun.
 - A `bun.lock` lockfile is present.
