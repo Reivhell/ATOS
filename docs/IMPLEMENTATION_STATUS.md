@@ -41,3 +41,9 @@ The EA now captures one terminal tick for both the telemetry frame and native `O
 | Svelte/Vite build | README (old: unverified) | `npm run build` succeeds (3434 modules) | updated |
 | Rust tests | README (old: unverified) | `cargo test --all-targets` 239 passed | updated |
 | JS tests | README (old: unverified) | `npm test` 15 passed | updated |
+
+## MT5 durable order-intent engineering slice (2026-11-01)
+
+Branch `engineering/mt5-durable-order-intents` adds a standalone SQLite persistence primitive for a future execution controller. It persists account-scoped intents before dispatch, enforces idempotency and full-intent payload fingerprints, records transactional state-transition events, and exposes unresolved intents for restart recovery. Ambiguous post-send timeouts are represented as `unknown` and cannot transition directly back to `dispatching`; reconciliation must resolve them first.
+
+This is not live execution. The module is registered under the MT5 infrastructure namespace but is not connected to the read-only bridge, UI, or any broker submission path. Tests are authored but must run in CI before merging. Broker reconciliation, `OrderCheck`, outbox dispatch, and demo-account acceptance remain outstanding. See [MT5 durable order-intent ledger](MT5_DURABLE_ORDER_INTENT_LEDGER_2026-11-01.md).
