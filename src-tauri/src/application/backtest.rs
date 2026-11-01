@@ -765,7 +765,8 @@ fn run_once(
                 cash = resulting_cash;
                 trade_pnls.push(trade_pnl);
                 quantity = 0.0;
-                        in_position = false;
+                entry_cash_spent = 0.0;
+                in_position = false;
             }
         }
         let equity = cash + quantity * price;
@@ -808,7 +809,6 @@ fn run_once(
         trade_pnls.push(trade_pnl);
         cash = net;
         quantity = 0.0;
-        entry_cash_spent = 0.0;
         if let Some(last_point) = points.last_mut() {
             last_point.equity = net;
         }
