@@ -42,6 +42,7 @@
     || status.lastSequence !== riskSizingResult.snapshotSequence
     || status.accountServer !== riskSizingResult.brokerServer
     || status.accountLogin !== riskSizingResult.accountLogin
+    || status.symbol !== riskSizingResult.symbol
     || seriesSymbol.trim() !== riskSizingResult.symbol
   );
   const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
