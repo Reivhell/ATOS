@@ -3317,6 +3317,28 @@ mod tests {
     }
 
     #[test]
+    fn completion_blocks_an_unregistered_evidence_locator() {
+        let plan = sample_plan();
+        let mut assessments = assessments_for(&plan);
+        let assessment = assessments
+            .iter_mut()
+            .find(|item| item.status == "evaluated")
+            .unwrap();
+        assessment.evidence_refs = vec![format!(
+            "snapshot:{}:binance:catalog-{}",
+            plan.dataset_sha256,
+            sha256_bytes(assessment.catalog_id.as_bytes())
+        )];
+
+        let result = evaluate_completion(request(plan, assessments)).unwrap();
+        assert!(!result.allowed);
+        assert!(result.next_layer_payload.is_none());
+        assert!(result.reasons.iter().any(|reason| {
+            reason.contains("Evaluated concept evidence references must be unique, canonical, and bound")
+        }));
+    }
+
+    #[test]
     fn evidence_refs_must_resolve_to_the_exact_market_scope_and_candle() {
         let plan = sample_plan();
         let request = request(plan.clone(), assessments_for(&plan));
