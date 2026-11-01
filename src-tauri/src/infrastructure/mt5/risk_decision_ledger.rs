@@ -1,4 +1,5 @@
 //! Append-only, account-scoped audit receipts for MT5 risk-sizing decisions.
+use keyring::Entry;
 use rusqlite::{params, Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,6 +12,108 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const GENESIS_SHA256: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_LEDGER_EVENTS_PER_ACCOUNT: u64 = 1_000_000;
 const MAX_AUDIT_PAYLOAD_BYTES: usize = 256 * 1024;
+const CHECKPOINT_SERVICE: &str = "dev.agentictrading.os.mt5-risk-ledger";
+const CHECKPOINT_VERSION: u8 = 1;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LedgerCheckpoint {
+    version: u8,
+    event_count: u64,
+    head_sha256: String,
+}
+
+fn checkpoint_credential_name(broker_server: &str, account_login: &str) -> String {
+    sha256_hex(format!("{broker_server}\\n{account_login}").as_bytes())
+}
+
+fn checkpoint_matches(
+    status: &Mt5RiskDecisionLedgerStatus,
+    checkpoint: &LedgerCheckpoint,
+) -> bool {
+    checkpoint.version == CHECKPOINT_VERSION
+        && checkpoint.event_count == status.event_count
+        && is_sha256(&checkpoint.head_sha256)
+        && checkpoint.head_sha256 == status.head_sha256
+}
+
+#[cfg(not(test))]
+fn read_checkpoint(
+    broker_server: &str,
+    account_login: &str,
+) -> Result<Option<LedgerCheckpoint>, String> {
+    let entry = Entry::new(
+        CHECKPOINT_SERVICE,
+        &checkpoint_credential_name(broker_server, account_login),
+    )
+    .map_err(|_| "MT5 risk-decision checkpoint could not access the operating-system credential store; ledger operations are blocked.".to_string())?;
+    match entry.get_password() {
+        Ok(value) => {
+            let checkpoint: LedgerCheckpoint = serde_json::from_str(&value)
+                .map_err(|_| "MT5 risk-decision checkpoint is malformed; ledger operations are blocked.".to_string())?;
+            if checkpoint.version != CHECKPOINT_VERSION
+                || !is_sha256(&checkpoint.head_sha256)
+            {
+                return Err("MT5 risk-decision checkpoint version or head is invalid; ledger operations are blocked.".into());
+            }
+            Ok(Some(checkpoint))
+        }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(_) => Err("MT5 risk-decision checkpoint could not be read from the operating-system credential store; ledger operations are blocked.".into()),
+    }
+}
+
+#[cfg(not(test))]
+fn write_checkpoint(
+    broker_server: &str,
+    account_login: &str,
+    checkpoint: &LedgerCheckpoint,
+) -> Result<(), String> {
+    let entry = Entry::new(
+        CHECKPOINT_SERVICE,
+        &checkpoint_credential_name(broker_server, account_login),
+    )
+    .map_err(|_| "MT5 risk-decision checkpoint could not access the operating-system credential store.".to_string())?;
+    let value = serde_json::to_string(checkpoint)
+        .map_err(|_| "MT5 risk-decision checkpoint could not be serialized.".to_string())?;
+    entry.set_password(&value)
+        .map_err(|_| "MT5 risk-decision checkpoint could not be durably stored in the operating-system credential store.".to_string())
+}
+
+#[cfg(not(test))]
+fn verify_external_checkpoint(
+    status: &Mt5RiskDecisionLedgerStatus,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    let checkpoint = read_checkpoint(&status.broker_server, &status.account_login)?;
+    match checkpoint {
+        Some(checkpoint) if checkpoint_matches(status, &checkpoint) => Ok(status.clone()),
+        Some(checkpoint) => Ok(invalid_status(
+            &status.broker_server,
+            &status.account_login,
+            status.event_count,
+            status.head_sha256.clone(),
+            checkpoint.event_count.min(status.event_count).saturating_add(1),
+            "Risk-decision ledger head does not match the operating-system checkpoint; refusing to trust or reset history.",
+        )),
+        None if status.event_count == 0 && status.head_sha256 == GENESIS_SHA256 => {
+            let genesis = LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: 0,
+                head_sha256: GENESIS_SHA256.into(),
+            };
+            write_checkpoint(&status.broker_server, &status.account_login, &genesis)?;
+            Ok(status.clone())
+        }
+        None => Ok(invalid_status(
+            &status.broker_server,
+            &status.account_login,
+            status.event_count,
+            status.head_sha256.clone(),
+            1,
+            "Risk-decision ledger has history but its independent operating-system checkpoint is missing; refusing to reset the anchor.",
+        )),
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -506,6 +609,17 @@ pub(crate) fn append(
         specification_fingerprint_sha256: &record.specification_fingerprint_sha256,
         previous_sha256: &previous_sha256,
     });
+    #[cfg(not(test))]
+    {
+        let anchored = verify_external_checkpoint(&verified)?;
+        if !anchored.valid {
+            return Err(format!(
+                "Risk-decision ledger checkpoint mismatch; refusing to append: {}",
+                anchored.integrity_error.unwrap_or_else(|| "checkpoint verification failed".into())
+            ));
+        }
+    }
+
     transaction
         .execute(
             "INSERT INTO mt5_risk_decision_events
@@ -533,6 +647,17 @@ pub(crate) fn append(
             ],
         )
         .map_err(|error| format!("Risk-decision event could not be appended: {error}"))?;
+    #[cfg(not(test))]
+    write_checkpoint(
+        &record.broker_server,
+        &record.account_login,
+        &LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: sequence,
+            head_sha256: event_hash.clone(),
+        },
+    )?;
+
     transaction
         .commit()
         .map_err(|error| format!("Risk-decision event commit failed: {error}"))?;
@@ -591,7 +716,15 @@ pub(crate) fn status(
         );
     }
     let connection = open_connection(path)?;
-    verify_chain(&connection, broker_server, account_login)
+    let verified = verify_chain(&connection, broker_server, account_login)?;
+    #[cfg(not(test))]
+    {
+        return verify_external_checkpoint(&verified);
+    }
+    #[cfg(test)]
+    {
+        Ok(verified)
+    }
 }
 
 #[cfg(test)]
@@ -644,6 +777,37 @@ mod tests {
             specification_revision: 3,
             specification_fingerprint_sha256: "a".repeat(64),
         }
+    }
+
+    #[test]
+    fn external_checkpoint_detects_deleted_tail_and_missing_history() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 1,
+            head_sha256: "a".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let original = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 2,
+            head_sha256: "b".repeat(64),
+        };
+        assert!(!checkpoint_matches(&status, &original));
+        let matching = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 1,
+            head_sha256: "a".repeat(64),
+        };
+        assert!(checkpoint_matches(&status, &matching));
+        let wrong_version = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION + 1,
+            event_count: 1,
+            head_sha256: "a".repeat(64),
+        };
+        assert!(!checkpoint_matches(&status, &wrong_version));
     }
 
     #[test]
