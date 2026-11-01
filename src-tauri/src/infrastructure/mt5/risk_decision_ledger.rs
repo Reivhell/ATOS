@@ -23,6 +23,15 @@ struct LedgerCheckpoint {
     version: u8,
     event_count: u64,
     head_sha256: String,
+    #[serde(default)]
+    pending: Option<PendingCheckpoint>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PendingCheckpoint {
+    event_count: u64,
+    head_sha256: String,
 }
 
 #[cfg(not(test))]
@@ -38,6 +47,7 @@ fn checkpoint_matches(
         && checkpoint.event_count == status.event_count
         && is_sha256(&checkpoint.head_sha256)
         && checkpoint.head_sha256 == status.head_sha256
+        && checkpoint.pending.is_none()
 }
 
 fn missing_checkpoint_status(status: &Mt5RiskDecisionLedgerStatus) -> Mt5RiskDecisionLedgerStatus {
@@ -114,12 +124,55 @@ fn verify_external_checkpoint(
 ) -> Result<Mt5RiskDecisionLedgerStatus, String> {
     let checkpoint = read_checkpoint(&status.broker_server, &status.account_login)?;
     match checkpoint {
+        Some(mut checkpoint) if checkpoint.pending.is_some() => {
+            let pending = checkpoint.pending.as_ref().expect("pending checkpoint checked");
+            if pending.event_count != checkpoint.event_count.saturating_add(1)
+                || !is_sha256(&pending.head_sha256)
+            {
+                return Ok(invalid_status(
+                    &status.broker_server,
+                    &status.account_login,
+                    status.event_count,
+                    status.head_sha256.clone(),
+                    checkpoint.event_count.saturating_add(1),
+                    "Risk-decision checkpoint has an invalid interrupted-append intent; manual recovery is required.",
+                ));
+            }
+            if checkpoint_matches(status, &checkpoint) {
+                return Ok(invalid_status(
+                    &status.broker_server,
+                    &status.account_login,
+                    status.event_count,
+                    status.head_sha256.clone(),
+                    pending.event_count,
+                    "Risk-decision append was interrupted before its outcome could be anchored; refusing automatic rollback or checkpoint reset. Manual recovery is required.",
+                ));
+            }
+            if status.event_count == pending.event_count
+                && status.head_sha256 == pending.head_sha256
+            {
+                checkpoint.event_count = pending.event_count;
+                checkpoint.head_sha256 = pending.head_sha256.clone();
+                checkpoint.pending = None;
+                write_checkpoint(&status.broker_server, &status.account_login, &checkpoint)?;
+                return Ok(status.clone());
+            }
+            Ok(invalid_status(
+                &status.broker_server,
+                &status.account_login,
+                status.event_count,
+                status.head_sha256.clone(),
+                checkpoint.event_count.min(status.event_count).saturating_add(1),
+                "Risk-decision ledger does not match either side of its interrupted append; manual recovery is required.",
+            ))
+        }
         Some(checkpoint) => Ok(compare_checkpoint(status, &checkpoint)),
         None if status.event_count == 0 && status.head_sha256 == GENESIS_SHA256 => {
             let genesis = LedgerCheckpoint {
                 version: CHECKPOINT_VERSION,
                 event_count: 0,
                 head_sha256: GENESIS_SHA256.into(),
+                pending: None,
             };
             write_checkpoint(&status.broker_server, &status.account_login, &genesis)?;
             Ok(status.clone())
@@ -652,6 +705,16 @@ pub(crate) fn append(
                 anchored.integrity_error.unwrap_or_else(|| "checkpoint verification failed".into())
             ));
         }
+        let mut checkpoint = read_checkpoint(&record.broker_server, &record.account_login)?
+            .ok_or_else(|| "Risk-decision checkpoint disappeared before append; refusing to write.".to_string())?;
+        if checkpoint.pending.is_some() {
+            return Err("Risk-decision checkpoint has an unresolved append; manual recovery is required.".into());
+        }
+        checkpoint.pending = Some(PendingCheckpoint {
+            event_count: sequence,
+            head_sha256: event_hash.clone(),
+        });
+        write_checkpoint(&record.broker_server, &record.account_login, &checkpoint)?;
     }
 
     transaction
@@ -681,21 +744,23 @@ pub(crate) fn append(
             ],
         )
         .map_err(|error| format!("Risk-decision event could not be appended: {error}"))?;
-    #[cfg(not(test))]
-    // Advance the protected head before commit so a crash can only cause a detectable mismatch.
-    write_checkpoint(
-        &record.broker_server,
-        &record.account_login,
-        &LedgerCheckpoint {
-            version: CHECKPOINT_VERSION,
-            event_count: sequence,
-            head_sha256: event_hash.clone(),
-        },
-    )?;
-
     transaction
         .commit()
         .map_err(|error| format!("Risk-decision event commit failed: {error}"))?;
+
+    #[cfg(not(test))]
+    {
+        write_checkpoint(
+            &record.broker_server,
+            &record.account_login,
+            &LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: sequence,
+                head_sha256: event_hash.clone(),
+                pending: None,
+            },
+        )?;
+    }
     let committed_event: (String, String, String, String) = connection
         .query_row(
             "SELECT request_sha256, result_sha256, previous_sha256, event_sha256
@@ -829,18 +894,21 @@ mod tests {
             version: CHECKPOINT_VERSION,
             event_count: 2,
             head_sha256: "b".repeat(64),
+            pending: None,
         };
         assert!(!checkpoint_matches(&status, &original));
         let matching = LedgerCheckpoint {
             version: CHECKPOINT_VERSION,
             event_count: 1,
             head_sha256: "a".repeat(64),
+            pending: None,
         };
         assert!(checkpoint_matches(&status, &matching));
         let wrong_version = LedgerCheckpoint {
             version: CHECKPOINT_VERSION + 1,
             event_count: 1,
             head_sha256: "a".repeat(64),
+            pending: None,
         };
         assert!(!checkpoint_matches(&status, &wrong_version));
     }
@@ -880,6 +948,7 @@ mod tests {
             version: CHECKPOINT_VERSION,
             event_count: final_receipt.sequence,
             head_sha256: final_receipt.event_sha256,
+            pending: None,
         };
         let result = compare_checkpoint(&truncated, &checkpoint);
         assert!(!result.valid);
