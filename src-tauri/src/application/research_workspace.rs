@@ -6,7 +6,10 @@
 //! hash-chained event ledger. Research decisions are never execution permissions.
 
 use crate::{
-    application::backtest::{compare_tournament_candidate_priority, StrategyParameterTournament, TournamentCandidatePriority},
+    application::backtest::{
+        compare_tournament_candidate_priority, StrategyParameterTournament,
+        TournamentCandidatePriority,
+    },
     domain::models::{
         BacktestCostStressScenario, BacktestOutOfSampleFold, BacktestRequest, BacktestResult,
         CandleInterval, RiskLimits,
@@ -41,7 +44,17 @@ const MAX_RESEARCH_EVENTS: i64 = 1_024;
 const MAX_BOOTSTRAP_OBSERVATIONS: usize = 500_000;
 const BOOTSTRAP_WORK_BUDGET: u64 = 25_000_000;
 const RESEARCH_GATE_VERSION: &str = "atos-research-gate-v1";
-type ResearchHypothesisDbRow = (String, String, String, String, String, String, i64, i64, i64);
+type ResearchHypothesisDbRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    i64,
+);
 
 #[derive(Debug, Clone, Copy)]
 struct ResearchGateThresholds {
