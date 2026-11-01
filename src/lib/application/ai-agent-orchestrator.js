@@ -148,6 +148,12 @@ export async function evaluateAgentResearchReport(report) {
 
   const rawBundle = root.evidenceBundle;
   assert(Array.isArray(rawBundle) && rawBundle.length === 4, 'Native evidence bundle must contain exactly four analytical domains.');
+  const declaredDomains = new Set();
+  for (const [index, rawItem] of rawBundle.entries()) {
+    const item = asRecord(rawItem, `Native evidence item ${index + 1} is malformed.`);
+    assert(typeof item.domain === 'string' && DOMAINS.includes(item.domain) && !declaredDomains.has(item.domain), 'Native evidence includes a duplicate or unregistered domain.');
+    declaredDomains.add(item.domain);
+  }
   /** @type {Set<string>} */
   const seenDomains = new Set();
   /** @type {AgentEvidence[]} */
