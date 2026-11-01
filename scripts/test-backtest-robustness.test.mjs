@@ -26,7 +26,7 @@ test('out-of-sample windows are fixed-size, chronological, use explicit indicato
   assert.match(rust, /let minimum_test_bars = request\.slow_period\.saturating_mul\(2\)\.max\(30\)/);
   assert.match(rust, /let fold_count = complete_window_count\.min\(12\)/);
   assert.match(rust, /run_once\(symbol, window, request\.clone\(\), source, warmup_bars\)/);
-  assert.match(rust, /for \\(i, candle\\) in candles\\.iter\\(\\)\\.enumerate\\(\\)\\.skip\\(evaluation_start_index\\)/);
+  assert.match(rust, /for \(i, candle\) in candles\.iter\(\)\.enumerate\(\)\.skip\(evaluation_start_index\)/);
   assert.match(models, /pub out_of_sample_folds: Vec<BacktestOutOfSampleFold>/);
   assert.match(types, /outOfSampleFolds: BacktestOutOfSampleFold\[\]/);
   assert.match(app, /Out-of-sample stability/);
