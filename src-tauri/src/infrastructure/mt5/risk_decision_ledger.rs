@@ -541,8 +541,13 @@ pub(crate) fn append(
             "SELECT request_sha256, result_sha256, previous_sha256, event_sha256
              FROM mt5_risk_decision_events
              WHERE broker_server=?1 AND account_login=?2 AND sequence=?3",
-            params![record.broker_server, record.account_login, i64::try_from(sequence)
-                .map_err(|_| "Risk-decision sequence exceeds SQLite integer capacity.".to_string())?],
+            params![
+                record.broker_server,
+                record.account_login,
+                i64::try_from(sequence).map_err(|_| {
+                    "Risk-decision sequence exceeds SQLite integer capacity.".to_string()
+                })?,
+            ],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(|error| format!("Committed risk-decision event could not be re-read: {error}"))?;
