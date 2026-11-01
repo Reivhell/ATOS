@@ -2410,7 +2410,7 @@ where
                         trusted.id
                     ));
                 }
-                if !has_auditable_refs(&assessment.evidence_refs) {
+                if !has_auditable_refs(&assessment.evidence_refs, &market.dataset_sha256) {
                     reasons.push(format!(
                         "Not-applicable status requires auditable contextual evidence: {}.",
                         trusted.id
