@@ -138,7 +138,9 @@ fn verify_external_checkpoint(
                     "Risk-decision checkpoint has an invalid interrupted-append intent; manual recovery is required.",
                 ));
             }
-            if checkpoint_matches(status, &checkpoint) {
+            if status.event_count == checkpoint.event_count
+                && status.head_sha256 == checkpoint.head_sha256
+            {
                 return Ok(invalid_status(
                     &status.broker_server,
                     &status.account_login,
