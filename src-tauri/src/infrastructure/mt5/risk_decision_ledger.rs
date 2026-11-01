@@ -39,10 +39,7 @@ fn checkpoint_credential_name(broker_server: &str, account_login: &str) -> Strin
     sha256_hex(format!("{broker_server}\\n{account_login}").as_bytes())
 }
 
-fn checkpoint_matches(
-    status: &Mt5RiskDecisionLedgerStatus,
-    checkpoint: &LedgerCheckpoint,
-) -> bool {
+fn checkpoint_matches(status: &Mt5RiskDecisionLedgerStatus, checkpoint: &LedgerCheckpoint) -> bool {
     checkpoint.version == CHECKPOINT_VERSION
         && checkpoint.event_count == status.event_count
         && is_sha256(&checkpoint.head_sha256)
@@ -61,7 +58,10 @@ fn missing_checkpoint_status(status: &Mt5RiskDecisionLedgerStatus) -> Mt5RiskDec
     )
 }
 
-fn compare_checkpoint(status: &Mt5RiskDecisionLedgerStatus, checkpoint: &LedgerCheckpoint) -> Mt5RiskDecisionLedgerStatus {
+fn compare_checkpoint(
+    status: &Mt5RiskDecisionLedgerStatus,
+    checkpoint: &LedgerCheckpoint,
+) -> Mt5RiskDecisionLedgerStatus {
     if checkpoint_matches(status, checkpoint) {
         return status.clone();
     }
@@ -111,7 +111,10 @@ fn write_checkpoint(
         CHECKPOINT_SERVICE,
         &checkpoint_credential_name(broker_server, account_login),
     )
-    .map_err(|_| "MT5 risk-decision checkpoint could not access the operating-system credential store.".to_string())?;
+    .map_err(|_| {
+        "MT5 risk-decision checkpoint could not access the operating-system credential store."
+            .to_string()
+    })?;
     let value = serde_json::to_string(checkpoint)
         .map_err(|_| "MT5 risk-decision checkpoint could not be serialized.".to_string())?;
     entry.set_password(&value)
@@ -310,12 +313,26 @@ fn verify_immutability_triggers(connection: &Connection) -> Result<(), String> {
     ];
     for (name, required_sql) in REQUIRED_TRIGGERS {
         let sql: Option<String> = connection
-            .query_row("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?1", [name], |row| row.get(0))
-            .map_err(|error| format!("Cannot inspect MT5 risk-decision ledger guard {name}: {error}"))?;
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?1",
+                [name],
+                |row| row.get(0),
+            )
+            .map_err(|error| {
+                format!("Cannot inspect MT5 risk-decision ledger guard {name}: {error}")
+            })?;
         let Some(sql) = sql else {
-            return Err(format!("MT5 risk-decision ledger guard {name} is missing; writes are disabled."));
+            return Err(format!(
+                "MT5 risk-decision ledger guard {name} is missing; writes are disabled."
+            ));
         };
-        let normalize_sql = |value: &str| value.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_uppercase();
+        let normalize_sql = |value: &str| {
+            value
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_ascii_uppercase()
+        };
         if normalize_sql(&sql) != normalize_sql(required_sql) {
             return Err(format!("MT5 risk-decision ledger guard {name} differs from the required append-only policy; writes are disabled."));
         }
@@ -704,7 +721,9 @@ pub(crate) fn append(
         if !anchored.valid {
             return Err(format!(
                 "Risk-decision ledger checkpoint mismatch; refusing to append: {}",
-                anchored.integrity_error.unwrap_or_else(|| "checkpoint verification failed".into())
+                anchored
+                    .integrity_error
+                    .unwrap_or_else(|| "checkpoint verification failed".into())
             ));
         }
         let mut checkpoint = read_checkpoint(&record.broker_server, &record.account_login)?
@@ -981,7 +1000,10 @@ mod tests {
         assert!(!result.valid);
         assert_eq!(result.event_count, 4);
         assert_eq!(result.first_invalid_sequence, Some(1));
-        assert!(result.integrity_error.unwrap().contains("refusing to reset"));
+        assert!(result
+            .integrity_error
+            .unwrap()
+            .contains("refusing to reset"));
     }
 
     #[test]
@@ -990,10 +1012,12 @@ mod tests {
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         let final_receipt = append(&path, &sample_record("12345", "BLOCKED", 2)).unwrap();
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch(
-            "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
              DELETE FROM mt5_risk_decision_events WHERE sequence=2;",
-        ).unwrap();
+            )
+            .unwrap();
         let truncated = verify_chain(&connection, "Broker-Live", "12345").unwrap();
         assert!(truncated.valid);
         assert_eq!(truncated.event_count, 1);
@@ -1081,7 +1105,9 @@ mod tests {
         let path = initialized_path();
         let connection = Connection::open(&path).unwrap();
         connection.execute_batch("DROP TRIGGER trg_mt5_risk_decision_events_no_update; CREATE TRIGGER trg_mt5_risk_decision_events_no_update BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(IGNORE); END;").unwrap();
-        assert!(initialize(&connection).unwrap_err().contains("differs from the required append-only policy"));
+        assert!(initialize(&connection)
+            .unwrap_err()
+            .contains("differs from the required append-only policy"));
         let _ = std::fs::remove_file(path);
     }
 
