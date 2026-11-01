@@ -37,3 +37,17 @@ test('market structure summaries are calculated in Rust and rendered from the na
   assert.match(app, /nativeStructure\.bias/);
   assert.doesNotMatch(app, /technicalEnvelope\.structure\.bias/);
 });
+
+test('Rust generates bounded indicator-domain signals through the native application boundary', () => {
+  assert.match(rust, /pub fn calculate_signal_snapshot\(candles: &\[Candle\]\)/);
+  assert.match(rust, /native_signal\("trend"/);
+  assert.match(rust, /native_signal\("momentum"/);
+  assert.match(rust, /native_signal\("location"/);
+  assert.match(rust, /native_signal_snapshot_emits_bounded_indicator_domains/);
+  assert.match(rust, /native_signal_snapshot_rejects_invalid_ohlcv/);
+  assert.match(commands, /calculate_native_indicator_signals/);
+  assert.match(bootstrap, /commands::calculate_native_indicator_signals/);
+  assert.match(bridge, /invoke<NativeIndicatorSignalSnapshot>\('calculate_native_indicator_signals'/);
+  assert.match(app, /calculateNativeIndicatorSignals\(series\.candles\)/);
+  assert.match(app, /Rust indicator signals:/);
+});
