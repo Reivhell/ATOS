@@ -44,8 +44,8 @@ const MAX_AGENT_RUNS_PER_HOUR: u32 = 12;
 const MAX_AGENT_RUNS_PER_DAY: u32 = 50;
 const MAX_IMPORTED_MODELS: i64 = 64;
 const MAX_TOTAL_MODEL_BYTES: i64 = 64 * 1024 * 1024 * 1024;
-const MAX_PROVIDER_OPERATIONS: AtomicBool = AtomicBool::new(false);
-const MODEL_REGISTRY_OPERATIONS: AtomicBool = AtomicBool::new(false);
+static MAX_PROVIDER_OPERATIONS: AtomicBool = AtomicBool::new(false);
+static MODEL_REGISTRY_OPERATIONS: AtomicBool = AtomicBool::new(false);
 const CONTRACT_VERSION: &str = "agent-research-runtime.v2";
 
 #[derive(Debug, Clone, Serialize)]
