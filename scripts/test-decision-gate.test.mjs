@@ -223,6 +223,29 @@ test('assessment timestamps must include a timezone and evaluated evidence must 
 });
 
 
+test('evidence references reject duplicate, unsafe, oversized, and unregistered locators', () => {
+  const invalidReferenceSets = [
+    (digest) => [`snapshot:${digest}:binance:BTCUSDT/1h`, `snapshot:${digest}:binance:BTCUSDT/1h`],
+    (digest) => [`snapshot:${digest}:binance:BTCUSDT/../private`],
+    (digest) => [`snapshot:${digest}:binance:BTCUSDT//1h`],
+    (digest) => [`snapshot:${digest}:binance:BTCUSDT/./1h`],
+    (digest) => [`snapshot:${digest}:fixture:catalog-1`],
+    (digest) => [`snapshot:${digest}:binance:${'x'.repeat(250)}`],
+    (digest) => Array.from({ length: 33 }, (_, index) => `snapshot:${digest}:binance:catalog-${index}`),
+  ];
+
+  for (const makeRefs of invalidReferenceSets) {
+    const input = validInput();
+    const index = input.assessments.findIndex((assessment) => assessment.status === 'evaluated');
+    input.assessments[index] = { ...input.assessments[index], evidenceRefs: makeRefs('a'.repeat(64)) };
+    const result = evaluateStrictDecisionGate(input);
+    assert.ok(
+      result.reasons.some((reason) => reason.includes('evidence references must be unique, canonical, and bound')),
+      `unsafe evidence references accepted: ${JSON.stringify(input.assessments[index].evidenceRefs)}`,
+    );
+  }
+});
+
 test('assessment timestamp must match the exact snapshot cutoff and evidence references must be unique', () => {
   const input = validInput();
   input.assessments[0] = { ...input.assessments[0], asOf: '2026-10-28T06:00:00.000Z' };
