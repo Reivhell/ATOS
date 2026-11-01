@@ -32,6 +32,8 @@ type IssuedWorkPlanRegistry = Mutex<HashMap<String, (i64, StrictAnalysisWorkPlan
 static ISSUED_WORK_PLANS: OnceLock<IssuedWorkPlanRegistry> = OnceLock::new();
 const WORK_PLAN_TTL_MS: i64 = 15 * 60 * 1_000;
 const MAX_ISSUED_WORK_PLANS: usize = 256;
+const MAX_EVIDENCE_REFS_PER_ASSESSMENT: usize = 32;
+const MAX_EVIDENCE_REF_LENGTH: usize = 256;
 const STRICT_STORE_SCHEMA_VERSION: i64 = 3;
 const AUDIT_CHAIN_GENESIS: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -1937,8 +1939,10 @@ fn canonical_evidence_ref_matches_snapshot(reference: &str, snapshot_sha256: &st
 
 fn has_auditable_refs(refs: &[String], snapshot_sha256: &str) -> bool {
     !refs.is_empty()
+        && refs.len() <= MAX_EVIDENCE_REFS_PER_ASSESSMENT
         && refs.iter().all(|item| {
-            item.trim() == item
+            item.len() <= MAX_EVIDENCE_REF_LENGTH
+                && item.trim() == item
                 && canonical_evidence_ref_matches_snapshot(item, snapshot_sha256)
         })
         && refs.iter().collect::<BTreeSet<_>>().len() == refs.len()
@@ -3218,6 +3222,18 @@ mod tests {
         assert!(has_auditable_refs(std::slice::from_ref(&reference), &digest));
         assert!(!has_auditable_refs(&[reference.clone(), reference.clone()], &digest));
         assert!(!has_auditable_refs(&[format!(" {reference}")], &digest));
+    }
+
+    #[test]
+    fn evidence_refs_enforce_count_and_length_limits() {
+        let digest = "a".repeat(64);
+        let reference = format!("snapshot:{digest}:binance:BTCUSDT/1h/1700000000");
+        assert!(!has_auditable_refs(
+            &vec![reference.clone(); MAX_EVIDENCE_REFS_PER_ASSESSMENT + 1],
+            &digest
+        ));
+        let long_reference = format!("snapshot:{digest}:binance:{}", "x".repeat(MAX_EVIDENCE_REF_LENGTH));
+        assert!(!has_auditable_refs(&[long_reference], &digest));
     }
 
     #[test]
