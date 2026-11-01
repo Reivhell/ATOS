@@ -25,7 +25,7 @@ Progress is a weighted checklist, not a subjective estimate of production readin
 - Applied the same boundary to the Rust service, Rust completion gate, and JavaScript parity gate.
 - Added regression coverage for a spoofed `Binance public REST spoof` label and valid provider labels.
 - Expanded evidence locator rejection tests and corrected static contract assertions in earlier commits.
-- Added Rust regression tests for exact snapshot resolution, documented source labels, rejection of spoofed provider labels, and ambiguous duplicate candle timestamps; hardened the resolver against timestamps with leading zeros. These latest Rust changes are source-reviewed only; Rust compilation and test execution have not been observed.
+- Added Rust regression tests for exact snapshot resolution, documented source labels, rejection of spoofed provider labels, and duplicate candle timestamps. The duplicate-timestamp case now asserts both resolver rejection and completion-gate rejection; timestamps with leading zeros are also rejected. These latest Rust changes are source-reviewed only; Rust compilation and test execution have not been observed.
 
 ## Next milestones
 
