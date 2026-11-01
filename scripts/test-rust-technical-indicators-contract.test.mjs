@@ -45,6 +45,21 @@ test('market structure summaries are calculated in Rust and rendered from the na
   assert.doesNotMatch(app, /technicalEnvelope\.structure\.bias/);
 });
 
+test('strict evidence references are snapshot-bound, bounded, and fail closed in both gates', () => {
+  const strictGate = read('../src/lib/engines/decision/strict-decision-gate.js');
+  const strictRust = read('../src-tauri/src/application/strict_analysis.rs');
+  const schema = read('../docs/agents/strict-ta-assessment.schema.json');
+  assert.match(strictGate, /function canonicalEvidenceRefMatchesSnapshot/);
+  assert.match(strictGate, /refs\.length <= 32/);
+  assert.match(strictGate, /ref\.length <= 256/);
+  assert.match(strictRust, /fn canonical_evidence_ref_matches_snapshot/);
+  assert.match(strictRust, /MAX_EVIDENCE_REFS_PER_ASSESSMENT: usize = 32/);
+  assert.match(strictRust, /MAX_EVIDENCE_REF_LENGTH: usize = 256/);
+  assert.match(strictRust, /evidence_refs_enforce_count_and_length_limits/);
+  assert.match(schema, /"maxItems": 32/);
+  assert.match(schema, /"maxLength": 256/);
+});
+
 test('Rust generates bounded indicator-domain signals through the native application boundary', () => {
   assert.match(rust, /pub fn calculate_signal_snapshot\(candles: &\[Candle\]\)/);
   assert.match(rust, /native_signal\("trend"/);
