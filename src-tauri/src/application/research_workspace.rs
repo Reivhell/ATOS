@@ -29,7 +29,17 @@ use std::{
 };
 use uuid::Uuid;
 
-type ResearchHypothesisRow = (String, String, String, String, String, String, i64, i64, i64);
+type ResearchHypothesisRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    i64,
+);
 
 const WORKSPACE_SCHEMA_VERSION: i64 = 1;
 const ZERO_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
