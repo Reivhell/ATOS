@@ -40,6 +40,9 @@
   $: riskSizingResultStale = !!riskSizingResult && (
     !status?.connected || status.stale || status.quoteStale
     || status.lastSequence !== riskSizingResult.snapshotSequence
+    || status.accountServer !== riskSizingResult.brokerServer
+    || status.accountLogin !== riskSizingResult.accountLogin
+    || seriesSymbol.trim() !== riskSizingResult.symbol
   );
   const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const sessionClock = (seconds: number) => seconds === 86400 ? '24:00' : `${String(Math.floor(seconds / 3600)).padStart(2, '0')}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}`;
