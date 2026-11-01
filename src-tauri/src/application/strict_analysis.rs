@@ -2686,7 +2686,7 @@ mod tests {
         StrictCompletionRequest {
             market_data: StrictMarketDataContext {
                 validated: true,
-                source: "test-fixture".into(),
+                source: "Binance public REST".into(),
                 as_of: plan.as_of.clone(),
                 dataset_sha256: plan.dataset_sha256.clone(),
                 symbol: plan.symbol.clone(),
@@ -2773,6 +2773,20 @@ mod tests {
         let mut tampered = plan.clone();
         tampered.as_of = "2026-10-27T09:00:00.000Z".into();
         assert!(!work_plan_is_unmodified_and_unexpired(&tampered).unwrap());
+    }
+
+    #[test]
+    fn strict_completion_rejects_untrusted_market_source_labels() {
+        let plan = sample_plan();
+        let assessments = assessments_for(&plan);
+        let mut req = request(plan, assessments);
+        req.market_data.source = "test-fixture".into();
+        let result = evaluate_completion(req).unwrap();
+        assert!(result.reasons.iter().any(|reason| {
+            reason.contains("trusted Rust-owned Binance public REST provenance")
+        }));
+        assert!(!result.allowed);
+        assert!(result.next_layer_payload.is_none());
     }
 
     #[test]
