@@ -338,7 +338,7 @@ impl ResearchWorkspace {
                 .map_err(|error| format!("Cannot create research workspace directory: {error}"))?;
         }
         Self::verify_existing_database(path)?;
-        let mut connection = Connection::open(path)
+        let connection = Connection::open(path)
             .map_err(|error| format!("Cannot open research workspace database: {error}"))?;
         connection
             .busy_timeout(Duration::from_secs(5))
