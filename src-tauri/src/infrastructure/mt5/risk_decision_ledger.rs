@@ -40,6 +40,17 @@ fn checkpoint_matches(
         && checkpoint.head_sha256 == status.head_sha256
 }
 
+fn missing_checkpoint_status(status: &Mt5RiskDecisionLedgerStatus) -> Mt5RiskDecisionLedgerStatus {
+    invalid_status(
+        &status.broker_server,
+        &status.account_login,
+        status.event_count,
+        status.head_sha256.clone(),
+        if status.event_count == 0 { 0 } else { 1 },
+        "Risk-decision ledger checkpoint is missing; refusing to reset the anchor or trust unanchored history.",
+    )
+}
+
 fn compare_checkpoint(status: &Mt5RiskDecisionLedgerStatus, checkpoint: &LedgerCheckpoint) -> Mt5RiskDecisionLedgerStatus {
     if checkpoint_matches(status, checkpoint) {
         return status.clone();
@@ -113,14 +124,7 @@ fn verify_external_checkpoint(
             write_checkpoint(&status.broker_server, &status.account_login, &genesis)?;
             Ok(status.clone())
         }
-        None => Ok(invalid_status(
-            &status.broker_server,
-            &status.account_login,
-            status.event_count,
-            status.head_sha256.clone(),
-            1,
-            "Risk-decision ledger has history but its independent operating-system checkpoint is missing; refusing to reset the anchor.",
-        )),
+        None => Ok(missing_checkpoint_status(status)),
     }
 }
 
@@ -818,6 +822,24 @@ mod tests {
             head_sha256: "a".repeat(64),
         };
         assert!(!checkpoint_matches(&status, &wrong_version));
+    }
+
+    #[test]
+    fn missing_checkpoint_rejects_nonempty_history_without_resetting_anchor() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 4,
+            head_sha256: "a".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let result = missing_checkpoint_status(&status);
+        assert!(!result.valid);
+        assert_eq!(result.event_count, 4);
+        assert_eq!(result.first_invalid_sequence, Some(1));
+        assert!(result.integrity_error.unwrap().contains("refusing to reset"));
     }
 
     #[test]
