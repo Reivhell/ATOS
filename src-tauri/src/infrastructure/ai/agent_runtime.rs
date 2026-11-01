@@ -1934,14 +1934,12 @@ pub fn import_local_model(
         let _ = fs::remove_file(&final_path);
         return Err("Model registry could not accept the imported artifact.".into());
     }
-    if let Err(error) = append_journal_tx(
+    append_journal_tx(
         &transaction,
         &model.id,
         "model_artifact_imported",
         json!({ "modelId": model.id, "format": model.format, "sizeBytes": model.size_bytes, "sha256": model.sha256, "executionStatus": model.execution_status }),
-    ) {
-        return Err(error);
-    }
+    )?;
     transaction
         .commit()
         .map_err(|_| "Model registry transaction could not be committed.".to_string())?;
