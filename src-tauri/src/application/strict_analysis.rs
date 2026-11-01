@@ -1909,9 +1909,38 @@ fn timeframe_duration_ms(value: &str) -> Option<i64> {
 fn meaningful_reason(value: &str) -> bool {
     value.trim().chars().count() >= 12
 }
-fn has_auditable_refs(refs: &[String]) -> bool {
+fn canonical_evidence_ref_matches_snapshot(reference: &str, snapshot_sha256: &str) -> bool {
+    let Some(rest) = reference.strip_prefix("snapshot:") else {
+        return false;
+    };
+    let Some((bound_snapshot, source_and_locator)) = rest.split_once(':') else {
+        return false;
+    };
+    if !valid_sha256(bound_snapshot)
+        || !bound_snapshot.eq_ignore_ascii_case(snapshot_sha256)
+    {
+        return false;
+    }
+    let Some((source, locator)) = source_and_locator.split_once(':') else {
+        return false;
+    };
+    let valid_token = |value: &str| {
+        !value.is_empty()
+            && value.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/' | b'~')
+            })
+    };
+    valid_token(source)
+        && valid_token(locator)
+        && !locator.contains("..")
+}
+
+fn has_auditable_refs(refs: &[String], snapshot_sha256: &str) -> bool {
     !refs.is_empty()
-        && refs.iter().all(|item| !item.trim().is_empty())
+        && refs.iter().all(|item| {
+            item.trim() == item
+                && canonical_evidence_ref_matches_snapshot(item, snapshot_sha256)
+        })
         && refs.iter().collect::<BTreeSet<_>>().len() == refs.len()
 }
 
@@ -2331,7 +2360,7 @@ where
                     .entry(trusted.category.clone())
                     .or_default()
                     .evaluated += 1;
-                if !has_auditable_refs(&assessment.evidence_refs) {
+                if !has_auditable_refs(&assessment.evidence_refs, &market.dataset_sha256) {
                     reasons.push(format!(
                         "Evaluated concept lacks evidence references: {}.",
                         trusted.id
@@ -2616,7 +2645,7 @@ mod tests {
                 evidence_refs: if entry.availability == "Catalog only" {
                     Vec::new()
                 } else {
-                    vec![format!("test:{}", entry.id)]
+                    vec![format!("snapshot:{}:test:catalog-{}", plan.dataset_sha256, sha256_bytes(entry.id.as_bytes()))]
                 },
                 result: if entry.availability == "Catalog only" {
                     None
@@ -3151,6 +3180,44 @@ mod tests {
         assert_eq!(result.coverage.unsupported, 357);
         assert!(result.next_layer_payload.is_none());
         assert!(!result.live_execution_authorized);
+    }
+
+    #[test]
+    fn canonical_evidence_refs_must_bind_to_the_market_snapshot() {
+        let digest = "a".repeat(64);
+        assert!(canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:binance:BTCUSDT/1h/1700000000"),
+            &digest
+        ));
+        assert!(canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{}:binance:BTCUSDT/1h/1700000000", digest.to_ascii_uppercase()),
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{}:binance:BTCUSDT/1h/1700000000", "b".repeat(64)),
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            "test:arbitrary-claim",
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:binance:../private"),
+            &digest
+        ));
+        assert!(!canonical_evidence_ref_matches_snapshot(
+            &format!("snapshot:{digest}:binance:bad locator"),
+            &digest
+        ));
+    }
+
+    #[test]
+    fn evidence_refs_reject_duplicates_and_noncanonical_whitespace() {
+        let digest = "a".repeat(64);
+        let reference = format!("snapshot:{digest}:binance:BTCUSDT/1h/1700000000");
+        assert!(has_auditable_refs(std::slice::from_ref(&reference), &digest));
+        assert!(!has_auditable_refs(&[reference.clone(), reference.clone()], &digest));
+        assert!(!has_auditable_refs(&[format!(" {reference}")], &digest));
     }
 
     #[test]
