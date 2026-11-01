@@ -65,7 +65,7 @@ test('Native Tauri boundary does not trust UI-supplied data or risk approvals', 
 
 test('Issued work-plan registry storage tuple matches the consumed-state implementation', () => {
   assert.match(rustGate, /type IssuedWorkPlanRegistry = Mutex<HashMap<String,/);
-  assert.match(rustGate, /fn issued_work_plans\\(\\) -> &'static IssuedWorkPlanRegistry/);
+  assert.match(rustGate, /static ISSUED_WORK_PLANS: OnceLock<IssuedWorkPlanRegistry>/);
   assert.match(rustGate, /Some\(\(_, issued, consumed\)\)/);
 });
 
