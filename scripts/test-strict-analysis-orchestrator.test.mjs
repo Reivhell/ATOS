@@ -34,7 +34,7 @@ const assessmentsFor = (workPlan) => workPlan.entries.map((entry) => ({
   ...(entry.availability === 'Catalog only'
     ? { reason: 'No reviewed implementation is registered for this concept.' }
     : {
-        evidenceRefs: [`fixture:${entry.id}`],
+        evidenceRefs: [`snapshot:${fingerprint}:fixture:catalog-${workPlan.entries.indexOf(entry)}`],
         result: { fixtureOnly: true },
         lookAheadSafe: true,
         implementationVersion: REVIEWED_IMPLEMENTATION_VERSION_BY_CATALOG_ID[entry.id] ?? 'unregistered-fixture-version',
