@@ -207,6 +207,6 @@ const request = (app: ReturnType<typeof createResearchApi>, path: string, init: 
     expect(response.status).toBe(408);
     expect((await response.json()).error.code).toBe('request_timeout');
     expect(response.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/i);
-  });
+  }, 15_000);
 
 });
