@@ -144,6 +144,10 @@ test('duplicate domains, wrong aliases, malformed payload binding and execution 
     const report = await reportFixture();
     report.evidenceBundle[3].domain = 'trend';
     report.evidenceBundle[3].ref = 'native:trend';
+    report.evidenceBundle[3].payload.domain = 'trend';
+    report.evidenceBundle[3].payloadCanonicalJson = canonicalPayloadText(report.evidenceBundle[3].payload);
+    report.evidenceBundle[3].payloadSha256 = await hashText(report.evidenceBundle[3].payloadCanonicalJson);
+    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
     await assert.rejects(() => evaluateAgentResearchReport(report), /duplicate or unregistered domain/);
   });
   await t.test('wrong native alias', async () => {
