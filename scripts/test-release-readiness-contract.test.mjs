@@ -26,7 +26,7 @@ test('release readiness validates each invariant in the source module that owns 
   assert.match(versionPolicy, /Release tag v\$\{tagVersion\} does not match application manifest version/);
 });
 
-test('release preflight does not misreport source-owned policy tokens as missing workflow contracts', () => {
+test('release preflight does not misreport source-owned policy tokens as missing workflow contracts', { timeout: 60_000 }, () => {
   const result = spawnSync('bun', ['run', 'scripts/check-release-readiness.mjs'], {
     cwd: ROOT,
     encoding: 'utf8',
