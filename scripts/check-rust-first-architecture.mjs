@@ -19,7 +19,7 @@ if (!fs.existsSync(policyPath)) {
 
 let diff;
 try {
-  diff = run(['diff', '--unified=0', '--find-renames', 'HEAD^1', 'HEAD', '--', 'src', 'api/src']);
+  diff = run(['show', '--format=', '--unified=0', 'HEAD', '--', 'src', 'api/src']);
 } catch (error) {
   console.error(`Cannot inspect the commit diff for Rust-first architecture enforcement: ${error.message}`);
   process.exit(1);
