@@ -264,6 +264,16 @@ test('evidence references must bind to the exact snapshot and use canonical safe
   input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:../private`] };
   result = evaluateStrictDecisionGate(input);
   assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:BTCUSDT//1h`] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+
+  input.assessments[index] = { ...original, evidenceRefs: [`snapshot:${'a'.repeat(64)}:binance:BTCUSDT/./1h`] };
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
+  result = evaluateStrictDecisionGate(input);
+  assert.ok(result.reasons.some((reason) => reason.includes('canonical')));
 });
 
 test('JavaScript parity gate never authorizes downstream handoff; Rust is authoritative', () => {
