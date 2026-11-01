@@ -79,7 +79,7 @@ function validSha256(value) {
 /** Evidence references are scoped to one exact dataset; this JS gate remains non-authoritative. */
 function canonicalEvidenceRefMatchesSnapshot(reference, snapshotSha256) {
   if (typeof reference !== 'string' || typeof snapshotSha256 !== 'string') return false;
-  const match = /^snapshot:([a-fA-F0-9]{64}):(binance|mt5|rust-indicator|rust-structure|backtest|fixture):([A-Za-z0-9._~/-]+)$/.exec(reference);
+  const match = /^snapshot:([a-fA-F0-9]{64}):(binance|mt5|rust-indicator|rust-structure|backtest):([A-Za-z0-9._~/-]+)$/.exec(reference);
   return Boolean(match)
     && match[1].toLowerCase() === snapshotSha256.toLowerCase()
     && !match[3].includes('..');
