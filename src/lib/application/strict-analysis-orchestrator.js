@@ -1,7 +1,7 @@
 /**
  * JavaScript-side planning and parity diagnostics for the strict 364-concept analysis.
  * This module never authorizes a downstream handoff. The authoritative work-plan/completion
- * commands live in Rust (`src-tauri/src/strict_analysis.rs`); no LLM dispatch is claimed here.
+ * commands live in Rust (`src-tauri/src/application/strict_analysis.rs`); no LLM dispatch is claimed here.
  */
 import { evaluateStrictDecisionGate } from '../engines/decision/strict-decision-gate.js';
 import { ASSESSMENT_CONTRACT_VERSION, DECISION_GATE_CONTRACT_VERSION, SPECIALIST_AGENT_BY_CATEGORY } from '../domain/decision/contracts.js';
