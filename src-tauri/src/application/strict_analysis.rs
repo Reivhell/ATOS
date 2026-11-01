@@ -2823,6 +2823,50 @@ mod tests {
     }
 
     #[test]
+    fn registered_evidence_refs_resolve_only_to_the_exact_market_snapshot() {
+        let digest = "a".repeat(64);
+        let market = StrictMarketDataContext {
+            validated: true,
+            source: "Binance public REST".into(),
+            as_of: "2026-10-27T08:00:00Z".into(),
+            dataset_sha256: digest.clone(),
+            symbol: "BTCUSDT".into(),
+            timeframe: "1h".into(),
+            candles: vec![Candle {
+                time: 1_798_000_000_000,
+                open: 100.0,
+                high: 102.0,
+                low: 99.0,
+                close: 101.0,
+                volume: 10.0,
+            }],
+        };
+        let valid = format!(
+            "snapshot:{digest}:binance:BTCUSDT/1h/1798000000000"
+        );
+        assert!(has_registered_evidence_refs(
+            std::slice::from_ref(&valid),
+            &market
+        ));
+
+        for reference in [
+            format!("snapshot:{digest}:mt5:BTCUSDT/1h/1798000000000"),
+            format!("snapshot:{digest}:rust-indicator:RSI/14"),
+            format!("snapshot:{digest}:backtest:run-1"),
+            format!("snapshot:{digest}:binance:ETHUSDT/1h/1798000000000"),
+            format!("snapshot:{digest}:binance:BTCUSDT/5m/1798000000000"),
+            format!("snapshot:{digest}:binance:BTCUSDT/1h/1798000000001"),
+            format!("snapshot:{}:binance:BTCUSDT/1h/1798000000000", "b".repeat(64)),
+            format!("snapshot:{digest}:binance:BTCUSDT/1h/01798000000000"),
+        ] {
+            assert!(
+                !has_registered_evidence_refs(&[reference.clone()], &market),
+                "unresolved evidence reference accepted: {reference}"
+            );
+        }
+    }
+
+    #[test]
     fn strict_completion_rejects_untrusted_market_source_labels() {
         for source in [
             "test-fixture",
