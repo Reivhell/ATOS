@@ -212,10 +212,10 @@ The three local SQLite stores are deliberately separate: paper-account state, MT
 
 ### Requirements
 
-- **Node.js 20+**
+- **Bun** (primary JavaScript runtime and package manager)
 - **Rust toolchain 1.99.1** (pinned in `rust-toolchain.toml`)
 - **Tauri native build prerequisites** for your operating system ([Tauri 2 setup guide](https://v2.tauri.app/start/prerequisites/))
-- **Bun** for the optional Hono research API and Bun compatibility tests
+- **Node.js** is not required for the normal JavaScript test/build workflow; Rust and platform-native Tauri prerequisites remain required.
 - **MetaTrader 5 + MetaEditor** only when installing and validating the MT5 bridge on a real terminal
 
 ### 1. Clone the repository
@@ -228,16 +228,15 @@ cd ATOS
 ### 2. Install dependencies
 
 ```bash
-npm ci --no-audit --fund=false
 bun install --frozen-lockfile
 ```
 
-Bun is needed for the optional API and Bun-specific test workflow. The Tauri desktop app uses the Node/Rust toolchains and the committed lockfiles.
+Bun installs dependencies and runs the frontend, Tauri CLI, repository checks, and JavaScript tests. The npm lockfile is retained as a transition safeguard; tagged releases still require both lockfiles until the Bun-only release path is validated.
 
 ### 3. Launch the desktop application
 
 ```bash
-npm run tauri dev
+bun run tauri dev
 ```
 
 This starts the Vite development server through the Tauri configuration and opens the native desktop window. The ordinary browser runtime is intentionally not a substitute for the Rust desktop runtime; account, risk, and other native operations require the desktop app.
@@ -245,7 +244,7 @@ This starts the Vite development server through the Tauri configuration and open
 ### 4. Build the desktop bundle
 
 ```bash
-npm run tauri build
+bun run tauri build
 ```
 
 A successful local build does not by itself certify the MT5 Expert Advisor, a broker connection, or packaged installs on every supported operating system.
@@ -253,9 +252,9 @@ A successful local build does not by itself certify the MT5 Expert Advisor, a br
 ### Optional: run the local research API
 
 ```bash
-npm run dev:api
+bun run dev:api
 # Or run without the development watcher:
-npm run start:api
+bun run start:api
 ```
 
 The Bun/Hono API is a separate local service. It binds to loopback, requires a bearer token, has bounded request handling, and does not expose order routes. Do not proxy it to the public internet. See [API security hardening](docs/API_SECURITY_HARDENING_0.5.9.md).
@@ -265,21 +264,21 @@ The Bun/Hono API is a separate local service. It binds to loopback, requires a b
 Run the checks relevant to the files you changed:
 
 ```bash
-npm run verify:repo
-npm test
-npm run typecheck:layers
-npm run build
+bun run verify:repo
+bun run test
+bun run typecheck:layers
+bun run build
 
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 ```
 
-The repository CI workflow also checks Bun compatibility, frontend type/build, Rust formatting/tests/Clippy, and source-level guardrails. Tagged release jobs add platform builds and artifact provenance checks.
+The repository CI workflow uses Bun for source guardrails, JavaScript tests, frontend type/build, Tauri commands, and release scripting. Rust formatting/tests/Clippy remain native toolchain checks. Tagged release jobs add platform builds and artifact provenance checks.
 
 ### Latest recorded verification
 
-The current implementation status records the following results on **2026-11-01**:
+The pre-migration implementation status recorded the following results on **2026-11-01**; these are historical Node/npm baseline results, not validation of the Bun migration:
 
 | Check | Recorded result |
 |---|---|
