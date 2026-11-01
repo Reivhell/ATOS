@@ -20,7 +20,7 @@ test('protocol v6 requires complete bounded pending-order inventory', () => {
   assert.match(bridge, /order_tickets\.insert/);
   assert.match(bridge, /order\.volume_current > order\.volume_initial/);
   assert.match(bridge, /const ORDER_STATE_PARTIAL: i64 = 3/);
-  assert.match(bridge, /const ORDER_STATE_CANCELED: i64 = 2/);
+  assert.match(bridge, /for terminal_state in \[2_i64, 4, 5, 6\]/);
   assert.match(bridge, /fn is_active_pending_order_state\(state: i64\)/);
   assert.match(bridge, /ORDER_STATE_PARTIAL/);
   assert.match(bridge, /ORDER_STATE_CANCELED/);
