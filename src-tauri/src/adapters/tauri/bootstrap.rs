@@ -24,6 +24,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::calculate_technical_indicator_readings,
             commands::calculate_native_market_structure,
+            commands::calculate_native_indicator_signals,
             commands::get_dashboard_state,
             commands::get_mt5_bridge_status,
             commands::get_mt5_bridge_setup,
