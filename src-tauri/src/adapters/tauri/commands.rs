@@ -5,7 +5,7 @@ use crate::{
         strict_analysis, strict_analysis_service,
     },
     domain::{
-        technical_analysis::{self, IndicatorReading},
+        technical_analysis::{self, IndicatorReading, NativeStructureSnapshot},
         market_data_platform::{
             MarketDataProviderCatalogEntry, MarketDataQuery, UnifiedMarketDataResult,
         },
@@ -29,6 +29,13 @@ pub fn calculate_technical_indicator_readings(
     candles: Vec<Candle>,
 ) -> Result<Vec<IndicatorReading>, String> {
     technical_analysis::calculate_readings(&candles)
+}
+
+#[tauri::command]
+pub fn calculate_native_market_structure(
+    candles: Vec<Candle>,
+) -> Result<NativeStructureSnapshot, String> {
+    technical_analysis::calculate_structure(&candles)
 }
 
 #[tauri::command]
