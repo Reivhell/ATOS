@@ -221,6 +221,7 @@ export async function verifyReleaseEvidence({
   bundleDir = 'src-tauri/target/release/bundle',
   evidenceDir = 'release-evidence',
   projectRoot = process.cwd(),
+  expectedSourceRevision = process.env.GITHUB_SHA,
 } = {}) {
   const dirs = ensureEvidenceDirectoryIsSeparate(bundleDir, evidenceDir);
   await assertEvidenceDirectoryShape(dirs.evidence);
@@ -242,8 +243,8 @@ export async function verifyReleaseEvidence({
   if (!/^[a-f0-9]{40,64}$/i.test(manifest.source?.revision ?? '') || manifest.source?.workingTree !== 'clean') {
     throw new Error('Release manifest does not identify a full commit from a clean source tree.');
   }
-  if (process.env.GITHUB_SHA && manifest.source.revision !== process.env.GITHUB_SHA.toLowerCase()) {
-    throw new Error('Release manifest source revision does not match the current CI commit.');
+  if (expectedSourceRevision && manifest.source.revision !== expectedSourceRevision.toLowerCase()) {
+    throw new Error('Release manifest source revision does not match the expected source commit.');
   }
   if (manifest.authenticity !== 'unsigned-hashes-only') throw new Error('Manifest authenticity label is missing or unsupported.');
   assertInventoryPaths(manifest.artifacts);

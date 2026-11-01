@@ -26,6 +26,7 @@ async function makeProject(t, { version = '0.5.6' } = {}) {
     evidenceDir: evidence,
     generatedAt: '2026-10-28T00:00:00.000Z',
     gitMetadata: { revision: COMMIT, workingTree: 'clean' },
+    expectedSourceRevision: COMMIT,
     target: { runnerOS: 'test-os', platform: 'test-platform', architecture: 'test-arch' },
     toolchain: { node: 'test-node', npm: null, rustc: null, cargo: null },
     ci: { provider: 'test', runId: null, runAttempt: null, ref: null },
@@ -46,6 +47,15 @@ test('release evidence hashes a sorted full artifact inventory and verifies clea
   assert.equal(checksums.hashes['bundle/QuantDinger.AppImage'], expected);
   const verified = await verifyReleaseEvidence(fixture.options);
   assert.equal(verified.verifiedArtifactCount, 2);
+});
+
+test('release evidence rejects a source revision that differs from the expected CI commit', async (t) => {
+  const fixture = await makeProject(t);
+  await createReleaseEvidence(fixture.options);
+  await assert.rejects(
+    verifyReleaseEvidence({ ...fixture.options, expectedSourceRevision: 'b'.repeat(40) }),
+    /does not match the expected source commit/,
+  );
 });
 
 test('release evidence rejects changed package bytes after manifest generation', async (t) => {

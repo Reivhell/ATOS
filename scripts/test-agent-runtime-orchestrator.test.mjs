@@ -38,13 +38,16 @@ async function hashText(text) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function reportFixture(overrides = {}) {
+async function reportFixture(overrides = {}, marketContextOverrides = {}) {
+  const asOf = marketContextOverrides.asOf ?? AS_OF;
+  const latestClosedBarAtMs = marketContextOverrides.latestClosedBarAtMs ?? LATEST_CLOSED_BAR_AT_MS;
+  const retrievedAtMs = marketContextOverrides.retrievedAtMs ?? RETRIEVED_AT_MS;
   const evidenceBundle = await Promise.all(DOMAINS.map(async (domain, index) => {
     const payload = { domain, direction: 'bullish', signalStrength: 0.8, metric: 100 + index };
     const payloadCanonicalJson = canonicalPayloadText(payload);
     return {
       ref: `native:${domain}`, domain, direction: 'bullish', signalStrength: 0.8,
-      source: 'rust-native-derived-evidence.v1', observedAt: AS_OF, datasetSha256: DATASET,
+      source: 'rust-native-derived-evidence.v1', observedAt: asOf, datasetSha256: DATASET,
       symbol: 'BTCUSDT', timeframe: '5m', payload, payloadCanonicalJson, payloadSha256: await hashText(payloadCanonicalJson),
     };
   }));
@@ -53,9 +56,9 @@ async function reportFixture(overrides = {}) {
     runId: '123e4567-e89b-42d3-a456-426614174000',
     providerId: 'openai',
     model: 'test-model',
-    generatedAt: AS_OF,
+    generatedAt: asOf,
     marketContext: {
-      symbol: 'BTCUSDT', timeframe: '5m', asOf: AS_OF, latestClosedBarAtMs: LATEST_CLOSED_BAR_AT_MS, retrievedAtMs: RETRIEVED_AT_MS, datasetSha256: DATASET,
+      symbol: 'BTCUSDT', timeframe: '5m', asOf, latestClosedBarAtMs, retrievedAtMs, datasetSha256: DATASET,
       source: 'Exchange public spot candles', providerStatus: 'CONNECTED · public spot feed',
       isLive: true, isFresh: true, candleCount: 120, freshnessLimitMs: 630000,
     },
@@ -143,6 +146,10 @@ test('duplicate domains, wrong aliases, malformed payload binding and execution 
   await t.test('duplicate domain', async () => {
     const report = await reportFixture();
     report.evidenceBundle[3].domain = 'trend';
+    report.evidenceBundle[3].ref = 'native:trend';
+    report.evidenceBundle[3].payload.domain = 'trend';
+    report.evidenceBundle[3].payloadCanonicalJson = canonicalPayloadText(report.evidenceBundle[3].payload);
+    report.evidenceBundle[3].payloadSha256 = await hashText(report.evidenceBundle[3].payloadCanonicalJson);
     await assert.rejects(() => evaluateAgentResearchReport(report), /duplicate or unregistered domain/);
   });
   await t.test('wrong native alias', async () => {
@@ -220,22 +227,23 @@ test('commentary is bounded and domain references cannot be cross-wired', async 
     assert.equal(result.decision.decision, 'BLOCK');
   });
   await t.test('closed candle that expires during processing is blocked', async () => {
-    const report = await reportFixture();
-    report.marketContext.latestClosedBarAtMs = Date.now() - report.marketContext.freshnessLimitMs - 1;
-    report.marketContext.asOf = new Date(report.marketContext.latestClosedBarAtMs).toISOString();
-    report.marketContext.retrievedAtMs = Date.now();
-    for (const item of report.evidenceBundle) item.observedAt = report.marketContext.asOf;
-    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
+    const latestClosedBarAtMs = Date.now() - 630_001;
+    const report = await reportFixture({}, {
+      latestClosedBarAtMs,
+      asOf: new Date(latestClosedBarAtMs).toISOString(),
+      retrievedAtMs: Date.now(),
+    });
     const result = await evaluateAgentResearchReport(report);
     assert.equal(result.decision.decision, 'BLOCK');
   });
   await t.test('receipt older than the native retrieval bound is blocked', async () => {
-    const report = await reportFixture();
-    report.marketContext.retrievedAtMs = Date.now() - 120_001;
-    report.marketContext.latestClosedBarAtMs = report.marketContext.retrievedAtMs - 100;
-    report.marketContext.asOf = new Date(report.marketContext.latestClosedBarAtMs).toISOString();
-    for (const item of report.evidenceBundle) item.observedAt = report.marketContext.asOf;
-    report.evidenceEnvelopeSha256 = await hash(scoringEnvelope(report.evidenceBundle));
+    const retrievedAtMs = Date.now() - 120_001;
+    const latestClosedBarAtMs = retrievedAtMs - 100;
+    const report = await reportFixture({}, {
+      retrievedAtMs,
+      latestClosedBarAtMs,
+      asOf: new Date(latestClosedBarAtMs).toISOString(),
+    });
     const result = await evaluateAgentResearchReport(report);
     assert.equal(result.decision.decision, 'BLOCK');
   });

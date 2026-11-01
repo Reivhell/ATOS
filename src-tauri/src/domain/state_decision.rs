@@ -43,7 +43,7 @@ fn changed(previous: &Value, next: &Value, name: &str) -> bool {
     field(previous, name) != field(next, name)
 }
 
-fn as_str<'a>(value: Option<&'a Value>) -> Option<&'a str> {
+fn as_str(value: Option<&Value>) -> Option<&str> {
     value.and_then(Value::as_str)
 }
 

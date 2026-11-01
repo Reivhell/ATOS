@@ -177,8 +177,10 @@ requireText(engine, 'BEGIN EXCLUSIVE;', 'Exclusive SQLite instance-lock transact
 requireText(engine, 'second_engine_instance_is_rejected_and_lock_is_released_on_close', 'Single-instance lock regression test');
 
 const backtest = read('src-tauri/src/application/backtest.rs');
-requireText(backtest, 'candles[i].open * (1.0 + slip_rate)', 'Backtest next-bar-open buy execution');
-requireText(backtest, 'candles[i].open * (1.0 - slip_rate)', 'Backtest next-bar-open sell execution');
+requireText(backtest, 'for (i, candle) in candles.iter().enumerate().skip(evaluation_start_index)', 'Backtest chronological iterator preserves execution-bar identity');
+requireText(backtest, 'let price = candle.close;', 'Backtest signal observation uses the current completed bar close');
+requireText(backtest, 'candle.open * (1.0 + slip_rate)', 'Backtest next-bar-open buy execution');
+requireText(backtest, 'candle.open * (1.0 - slip_rate)', 'Backtest next-bar-open sell execution');
 requireText(backtest, 'execution_uses_next_bar_open_not_the_same_bar_close', 'Backtest regression test');
 requireText(backtest, 'sharpe_annualization_tracks_observed_candle_interval', 'Backtest cadence regression test');
 requireText(backtest, 'crossover_strategy_requires_an_observed_cross_up', 'True crossover regression test');

@@ -156,10 +156,10 @@ pub fn calculate(
     if !(0..=MAX_HEARTBEAT_AGE_MS).contains(&heartbeat_age) {
         return Err("MT5 heartbeat is outside the risk-sizing freshness window.".into());
     }
-    let mut quote_age =
-        quote_age_within_window(now, snapshot.symbol.quote_time_ms).ok_or_else(|| {
-            "MT5 quote timestamp is future-dated or older than 60 seconds.".to_string()
-        })?;
+    quote_age_within_window(now, snapshot.symbol.quote_time_ms).ok_or_else(|| {
+        "MT5 quote timestamp is future-dated or older than 60 seconds.".to_string()
+    })?;
+    let mut quote_age: i64;
     if snapshot.symbol.name != symbol {
         return Err("Requested symbol does not match the live terminal quote symbol. Select that symbol in MT5 and wait for a fresh bridge frame.".into());
     }
@@ -355,7 +355,7 @@ pub fn calculate(
             request.stop_loss_price,
         ) {
             Ok(result) => {
-                match correlated_preflight_inventory(&bridge, &result, broker_server, account_login, symbol) {
+                match correlated_preflight_inventory(bridge, &result, broker_server, account_login, symbol) {
                     Err(error) => reasons.push(format!("Native calculation could not be bound to a complete account inventory: {error}")),
                     Ok(correlated) => {
                         snapshot = correlated.snapshot;
@@ -369,7 +369,7 @@ pub fn calculate(
                         quote_age = preflight_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
                         entry = if side == "BUY" { snapshot.symbol.ask } else { snapshot.symbol.bid };
                         stop_distance = if side == "BUY" { entry - request.stop_loss_price } else { request.stop_loss_price - entry };
-                        if quote_age < 0 || quote_age > MAX_QUOTE_AGE_MS || !stop_distance.is_finite() || stop_distance <= 0.0 {
+                        if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) || !stop_distance.is_finite() || stop_distance <= 0.0 {
                             reasons.push("The correlated account frame no longer contains a fresh quote with the requested stop on the loss side; refresh and retry.".into());
                         }
                         let native_loss = result.loss_at_stop_loss.unwrap_or(f64::NAN);
@@ -389,7 +389,7 @@ pub fn calculate(
                                 normalized_volume = corrected;
                                 match bridge.margin_preflight(broker_server, account_login, symbol, &side, normalized_volume, request.stop_loss_price) {
                                     Ok(rechecked) => {
-                                        match correlated_preflight_inventory(&bridge, &rechecked, broker_server, account_login, symbol) {
+                                        match correlated_preflight_inventory(bridge, &rechecked, broker_server, account_login, symbol) {
                                             Err(error) => reasons.push(format!("Corrected-volume calculation could not be bound to a complete account inventory: {error}")),
                                             Ok(correlated_again) => {
                                                 snapshot = correlated_again.snapshot;
@@ -403,7 +403,7 @@ pub fn calculate(
                                                 quote_age = corrected_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
                                                 entry = if side == "BUY" { snapshot.symbol.ask } else { snapshot.symbol.bid };
                                                 stop_distance = if side == "BUY" { entry - request.stop_loss_price } else { request.stop_loss_price - entry };
-                                                if quote_age < 0 || quote_age > MAX_QUOTE_AGE_MS || !stop_distance.is_finite() || stop_distance <= 0.0 {
+                                                if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) || !stop_distance.is_finite() || stop_distance <= 0.0 {
                                                     reasons.push("The corrected-volume snapshot no longer contains a fresh quote with the requested stop on the loss side; approval is blocked.".into());
                                                 }
                                                 let corrected_loss = rechecked.loss_at_stop_loss.unwrap_or(f64::NAN);
@@ -574,7 +574,7 @@ pub fn calculate(
     // frame and evaluate freshness at completion, not at function entry.
     let completed_at_ms = chrono::Utc::now().timestamp_millis();
     quote_age = completed_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
-    if quote_age < 0 || quote_age > MAX_QUOTE_AGE_MS {
+    if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) {
         reasons.push("The MT5 quote became future-dated or stale while risk sizing was being finalized; refresh and retry.".into());
     }
     let final_specification_age = completed_at_ms.saturating_sub(specification.last_observed_at_ms);
@@ -685,7 +685,7 @@ fn correlated_preflight_inventory(
         return Err("the correlated telemetry frame belongs to a different account, symbol, or disconnected terminal".into());
     }
     let now = chrono::Utc::now().timestamp_millis();
-    let quote_age = quote_age_within_window(now, snapshot.symbol.quote_time_ms)
+    quote_age_within_window(now, snapshot.symbol.quote_time_ms)
         .ok_or_else(|| "the quote in the correlated telemetry frame is future-dated or older than sixty seconds".to_string())?;
     if preflight.symbol != symbol || !preflight.success {
         return Err("the native terminal result did not succeed for the requested symbol".into());

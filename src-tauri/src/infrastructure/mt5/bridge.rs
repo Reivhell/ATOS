@@ -38,10 +38,6 @@ const MAX_PENDING_ORDERS: usize = 200;
 const ORDER_STATE_STARTED: i64 = 0;
 const ORDER_STATE_PLACED: i64 = 1;
 const ORDER_STATE_PARTIAL: i64 = 3;
-const ORDER_STATE_CANCELED: i64 = 2;
-const ORDER_STATE_FILLED: i64 = 4;
-const ORDER_STATE_REJECTED: i64 = 5;
-const ORDER_STATE_EXPIRED: i64 = 6;
 const ORDER_STATE_REQUEST_ADD: i64 = 7;
 const ORDER_STATE_REQUEST_MODIFY: i64 = 8;
 const ORDER_STATE_REQUEST_CANCEL: i64 = 9;
@@ -420,9 +416,9 @@ impl Mt5Bridge {
         };
         let age = last_heartbeat_at_ms.map(|timestamp| now.saturating_sub(timestamp));
         let fresh = age.is_some_and(|value| (0..=HEARTBEAT_STALE_AFTER_MS).contains(&value));
-        let quote_stale = snapshot.as_ref().map_or(true, |current| {
+        let quote_stale = snapshot.as_ref().is_none_or(|current| {
             let quote_age = now.saturating_sub(current.symbol.quote_time_ms);
-            quote_age < 0 || quote_age > 60_000
+            !(0..=60_000).contains(&quote_age)
         });
         let connected = connected_state && fresh;
         Mt5BridgeStatus {
@@ -962,16 +958,16 @@ fn handle_connection(
             return Err("MT5 telemetry frame exceeded the single outstanding margin-preflight result limit.".into());
         }
         validate_snapshot(&frame.snapshot)?;
-        validate_market_data_scope(
-            &auth.account_login,
-            &auth.broker_server,
-            &frame.snapshot,
-            &frame.market_data,
-            &frame.session_schedules,
-            frame.sent_at_ms,
-            &auth.symbols,
-            &auth.timeframes,
-        )?;
+        validate_market_data_scope(AuthenticatedMarketDataScope {
+            authenticated_login: &auth.account_login,
+            authenticated_server: &auth.broker_server,
+            snapshot: &frame.snapshot,
+            batch: &frame.market_data,
+            session_schedules: &frame.session_schedules,
+            frame_sent_at_ms: frame.sent_at_ms,
+            subscribed_symbols: &auth.symbols,
+            subscribed_timeframes: &auth.timeframes,
+        })?;
         validate_batch(&frame.market_data)?;
         let received_at_ms = now_ms();
         let frame_hash = Sha256::digest(&bytes)
@@ -1187,16 +1183,29 @@ fn write_json_line(stream: &mut TcpStream, value: &serde_json::Value) -> Result<
         .map_err(|error| format!("MT5 bridge response flush failed: {error}"))
 }
 
-fn validate_market_data_scope(
-    authenticated_login: &str,
-    authenticated_server: &str,
-    snapshot: &Mt5Snapshot,
-    batch: &Mt5MarketDataBatch,
-    session_schedules: &[Mt5SessionSchedule],
+#[derive(Clone, Copy)]
+struct AuthenticatedMarketDataScope<'a> {
+    authenticated_login: &'a str,
+    authenticated_server: &'a str,
+    snapshot: &'a Mt5Snapshot,
+    batch: &'a Mt5MarketDataBatch,
+    session_schedules: &'a [Mt5SessionSchedule],
     frame_sent_at_ms: i64,
-    subscribed_symbols: &[String],
-    subscribed_timeframes: &[String],
-) -> Result<(), String> {
+    subscribed_symbols: &'a [String],
+    subscribed_timeframes: &'a [String],
+}
+
+fn validate_market_data_scope(scope: AuthenticatedMarketDataScope<'_>) -> Result<(), String> {
+    let AuthenticatedMarketDataScope {
+        authenticated_login,
+        authenticated_server,
+        snapshot,
+        batch,
+        session_schedules,
+        frame_sent_at_ms,
+        subscribed_symbols,
+        subscribed_timeframes,
+    } = scope;
     if snapshot.account.login != authenticated_login
         || snapshot.account.server != authenticated_server
     {
@@ -1240,7 +1249,7 @@ fn validate_market_data_scope(
     for schedule in session_schedules {
         crate::infrastructure::mt5::market_data::validate_session_schedule(schedule)?;
         let age_ms = frame_sent_at_ms.saturating_sub(schedule.captured_at_ms);
-        if age_ms < 0 || age_ms > MAX_SESSION_CALENDAR_AGE_MS {
+        if !(0..=MAX_SESSION_CALENDAR_AGE_MS).contains(&age_ms) {
             return Err("MT5 broker session calendar is future-dated or older than the one-hour freshness ceiling.".into());
         }
     }
@@ -2407,52 +2416,56 @@ mod tests {
             })
             .collect();
         let valid = snapshot();
-        assert!(validate_market_data_scope(
+        let validate_scope = |authenticated_login: &str,
+                              authenticated_server: &str,
+                              batch: &Mt5MarketDataBatch,
+                              session_schedules: &[Mt5SessionSchedule],
+                              frame_sent_at_ms: i64| {
+            validate_market_data_scope(AuthenticatedMarketDataScope {
+                authenticated_login,
+                authenticated_server,
+                snapshot: &valid,
+                batch,
+                session_schedules,
+                frame_sent_at_ms,
+                subscribed_symbols: &symbols,
+                subscribed_timeframes: &timeframes,
+            })
+        };
+        assert!(validate_scope(
             "12345",
             "Broker-Live",
-            &valid,
             &Mt5MarketDataBatch::default(),
             &schedules,
-            1,
-            &symbols,
-            &timeframes
+            1
         )
         .is_ok());
         assert!(
-            validate_market_data_scope(
+            validate_scope(
                 "12345",
                 "Broker-Live",
-                &valid,
                 &Mt5MarketDataBatch::default(),
                 &[],
-                1,
-                &symbols,
-                &timeframes
+                1
             )
             .is_ok(),
             "transport may omit an unchanged calendar; the durable store verifies retained state"
         );
 
-        assert!(validate_market_data_scope(
+        assert!(validate_scope(
             "99999",
             "Broker-Live",
-            &valid,
             &Mt5MarketDataBatch::default(),
             &schedules,
-            1,
-            &symbols,
-            &timeframes
+            1
         )
         .is_err());
-        assert!(validate_market_data_scope(
+        assert!(validate_scope(
             "12345",
             "Other-Broker",
-            &valid,
             &Mt5MarketDataBatch::default(),
             &schedules,
-            1,
-            &symbols,
-            &timeframes
+            1
         )
         .is_err());
 
@@ -2469,17 +2482,7 @@ mod tests {
             }],
             bars: Vec::new(),
         };
-        assert!(validate_market_data_scope(
-            "12345",
-            "Broker-Live",
-            &valid,
-            &out_of_scope_tick,
-            &schedules,
-            1,
-            &symbols,
-            &timeframes
-        )
-        .is_err());
+        assert!(validate_scope("12345", "Broker-Live", &out_of_scope_tick, &schedules, 1).is_err());
 
         let out_of_scope_bar = Mt5MarketDataBatch {
             ticks: Vec::new(),
@@ -2497,38 +2500,22 @@ mod tests {
                 closed: true,
             }],
         };
-        assert!(validate_market_data_scope(
+        assert!(validate_scope("12345", "Broker-Live", &out_of_scope_bar, &schedules, 1).is_err());
+        assert!(validate_scope(
             "12345",
             "Broker-Live",
-            &valid,
-            &out_of_scope_bar,
-            &schedules,
-            1,
-            &symbols,
-            &timeframes
-        )
-        .is_err());
-        assert!(validate_market_data_scope(
-            "12345",
-            "Broker-Live",
-            &valid,
             &Mt5MarketDataBatch::default(),
             &schedules[..1],
-            1,
-            &symbols,
-            &timeframes
+            1
         )
         .is_err());
         assert!(
-            validate_market_data_scope(
+            validate_scope(
                 "12345",
                 "Broker-Live",
-                &valid,
                 &Mt5MarketDataBatch::default(),
                 &schedules,
-                MAX_SESSION_CALENDAR_AGE_MS + 2,
-                &symbols,
-                &timeframes
+                MAX_SESSION_CALENDAR_AGE_MS + 2
             )
             .is_err(),
             "cached broker calendars older than the one-hour ceiling must fail closed"

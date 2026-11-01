@@ -6,7 +6,10 @@
 //! hash-chained event ledger. Research decisions are never execution permissions.
 
 use crate::{
-    application::backtest::{compare_tournament_candidate_priority, StrategyParameterTournament},
+    application::backtest::{
+        compare_tournament_candidate_priority, StrategyParameterTournament,
+        TournamentCandidatePriority,
+    },
     domain::models::{
         BacktestCostStressScenario, BacktestOutOfSampleFold, BacktestRequest, BacktestResult,
         CandleInterval, RiskLimits,
@@ -41,6 +44,24 @@ const MAX_RESEARCH_EVENTS: i64 = 1_024;
 const MAX_BOOTSTRAP_OBSERVATIONS: usize = 500_000;
 const BOOTSTRAP_WORK_BUDGET: u64 = 25_000_000;
 const RESEARCH_GATE_VERSION: &str = "atos-research-gate-v1";
+type ResearchHypothesisDbRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    i64,
+);
+
+#[derive(Debug, Clone, Copy)]
+struct ResearchGateThresholds {
+    maximum_drawdown_pct: f64,
+    minimum_positive_oos_ratio: f64,
+    minimum_sharpe_ratio: f64,
+}
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
@@ -338,7 +359,7 @@ impl ResearchWorkspace {
                 .map_err(|error| format!("Cannot create research workspace directory: {error}"))?;
         }
         Self::verify_existing_database(path)?;
-        let mut connection = Connection::open(path)
+        let connection = Connection::open(path)
             .map_err(|error| format!("Cannot open research workspace database: {error}"))?;
         connection
             .busy_timeout(Duration::from_secs(5))
@@ -667,14 +688,18 @@ impl ResearchWorkspace {
                 .filter(|score| score.qualifies_for_selection)
                 .min_by(|left, right| {
                     compare_tournament_candidate_priority(
-                        left.training_sharpe_ratio,
-                        left.training_max_drawdown_pct,
-                        left.fast_period,
-                        left.slow_period,
-                        right.training_sharpe_ratio,
-                        right.training_max_drawdown_pct,
-                        right.fast_period,
-                        right.slow_period,
+                        TournamentCandidatePriority {
+                            sharpe: left.training_sharpe_ratio,
+                            drawdown: left.training_max_drawdown_pct,
+                            fast: left.fast_period,
+                            slow: left.slow_period,
+                        },
+                        TournamentCandidatePriority {
+                            sharpe: right.training_sharpe_ratio,
+                            drawdown: right.training_max_drawdown_pct,
+                            fast: right.fast_period,
+                            slow: right.slow_period,
+                        },
                     )
                 });
 
@@ -1113,17 +1138,7 @@ impl ResearchWorkspace {
     }
 
     fn verify_hypotheses(connection: &Connection) -> Result<u64, String> {
-        let rows: Vec<(
-            String,
-            String,
-            String,
-            String,
-            String,
-            String,
-            i64,
-            i64,
-            i64,
-        )> = {
+        let rows: Vec<ResearchHypothesisDbRow> = {
             let mut statement = connection.prepare(
                 "SELECT id,title,thesis,symbol,interval,status,revision,created_at_ms,updated_at_ms
                  FROM research_hypotheses ORDER BY id ASC",
@@ -1587,17 +1602,7 @@ impl ResearchWorkspace {
         connection: &Connection,
         hypothesis_id: &str,
     ) -> Result<Option<ResearchHypothesis>, String> {
-        let row: Option<(
-            String,
-            String,
-            String,
-            String,
-            String,
-            String,
-            i64,
-            i64,
-            i64,
-        )> = connection
+        let row: Option<ResearchHypothesisDbRow> = connection
             .query_row(
                 "SELECT id,title,thesis,symbol,interval,status,revision,created_at_ms,updated_at_ms
              FROM research_hypotheses WHERE id=?1",
@@ -1758,9 +1763,11 @@ impl ResearchWorkspace {
             &bootstrap,
             &risk_review,
             strategy_tournament.as_ref(),
-            request.max_drawdown_pct,
-            request.minimum_positive_oos_ratio,
-            request.minimum_sharpe_ratio,
+            ResearchGateThresholds {
+                maximum_drawdown_pct: request.max_drawdown_pct,
+                minimum_positive_oos_ratio: request.minimum_positive_oos_ratio,
+                minimum_sharpe_ratio: request.minimum_sharpe_ratio,
+            },
         );
         let created_at_ms = Utc::now().timestamp_millis();
         let id = Uuid::new_v4().to_string();
@@ -2531,10 +2538,13 @@ fn evaluate_committee(
     bootstrap: &BlockBootstrapSummary,
     risk: &RiskReviewResult,
     tournament: Option<&StrategyParameterTournament>,
-    maximum_drawdown_pct: f64,
-    minimum_positive_oos_ratio: f64,
-    minimum_sharpe_ratio: f64,
+    thresholds: ResearchGateThresholds,
 ) -> ResearchGateDecision {
+    let ResearchGateThresholds {
+        maximum_drawdown_pct,
+        minimum_positive_oos_ratio,
+        minimum_sharpe_ratio,
+    } = thresholds;
     let mut blockers = Vec::new();
     if result.trade_count < 3 {
         blockers.push(

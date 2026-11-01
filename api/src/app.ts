@@ -10,8 +10,10 @@ const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_REQUESTS = 30;
 const FAILED_AUTH_MAX_REQUESTS = 10;
 
-function jsonError(code: string, message: string, status: 400 | 401 | 403 | 404 | 408 | 413 | 415 | 429 | 500) {
-  return Response.json({ error: { code, message }, contractVersion: LOCAL_RESEARCH_API_CONTRACT }, { status, headers: securityHeaders() });
+function jsonError(code: string, message: string, status: 400 | 401 | 403 | 404 | 408 | 413 | 415 | 429 | 500, requestId?: string) {
+  const headers = new Headers(securityHeaders());
+  if (requestId) headers.set('X-Request-ID', requestId);
+  return Response.json({ error: { code, message }, contractVersion: LOCAL_RESEARCH_API_CONTRACT }, { status, headers });
 }
 
 function securityHeaders(): HeadersInit {
@@ -51,10 +53,11 @@ export function createResearchApi(options: { token: string; now?: () => number; 
     windowMs: RATE_WINDOW_MS,
     now: options.rateNow ?? (options.now ? options.now : () => performance.now()),
   });
-  const app = new Hono();
+  const app = new Hono<{ Variables: { requestId: string } }>();
 
   app.use('*', async (c, next) => {
     const requestId = crypto.randomUUID();
+    c.set('requestId', requestId);
     const startedAt = safeObservationNow();
     let statusCode = 500;
     let outcome = 'server_error';
@@ -63,7 +66,7 @@ export function createResearchApi(options: { token: string; now?: () => number; 
     const reject = (code: string, message: string, status: 400 | 401 | 403 | 404 | 408 | 413 | 415 | 429 | 500) => {
       statusCode = status;
       outcome = classifyRequestOutcome(code, status);
-      return jsonError(code, message, status);
+      return jsonError(code, message, status, requestId);
     };
 
     try {
@@ -152,24 +155,24 @@ export function createResearchApi(options: { token: string; now?: () => number; 
   app.get('/health', (c) => c.json({ status: 'ok', service: 'local-research-api', contractVersion: LOCAL_RESEARCH_API_CONTRACT, executionAuthority: 'none' }));
   app.post('/v1/analysis', async (c) => {
     const bounded = await readBoundedBody(c.req.raw);
-    if (bounded.kind === 'too_large') return jsonError('body_too_large', 'Request body exceeds the 2 MiB limit.', 413);
-    if (bounded.kind === 'timed_out') return jsonError('request_timeout', 'Request body was not received within the allowed time.', 408);
-    if (bounded.kind === 'invalid_utf8') return jsonError('invalid_encoding', 'Request body must be valid UTF-8.', 400);
-    if (bounded.kind === 'read_error') return jsonError('body_read_failed', 'Request body could not be read safely.', 400);
+    if (bounded.kind === 'too_large') return jsonError('body_too_large', 'Request body exceeds the 2 MiB limit.', 413, c.get('requestId'));
+    if (bounded.kind === 'timed_out') return jsonError('request_timeout', 'Request body was not received within the allowed time.', 408, c.get('requestId'));
+    if (bounded.kind === 'invalid_utf8') return jsonError('invalid_encoding', 'Request body must be valid UTF-8.', 400, c.get('requestId'));
+    if (bounded.kind === 'read_error') return jsonError('body_read_failed', 'Request body could not be read safely.', 400, c.get('requestId'));
     let payload: unknown;
     try {
       payload = JSON.parse(bounded.text);
     } catch {
-      return jsonError('invalid_json', 'Request body must be valid JSON.', 400);
+      return jsonError('invalid_json', 'Request body must be valid JSON.', 400, c.get('requestId'));
     }
     const request = parseAnalysisRequest(payload, now());
-    if (!request) return jsonError('invalid_analysis_request', 'Expected a supported symbol/timeframe and 34–2000 contiguous, UTC-grid-aligned OHLCV candles.', 400);
+    if (!request) return jsonError('invalid_analysis_request', 'Expected a supported symbol/timeframe and 34–2000 contiguous, UTC-grid-aligned OHLCV candles.', 400, c.get('requestId'));
     try {
       // Fingerprinting enables reproducibility and evidence binding; it does not authenticate
       // who supplied the candles. Provider trust and execution authority remain disabled.
       const datasetSha256 = await canonicalDatasetSha256(request.candles);
       const latestClosedBarAtMs = getLatestClosedBarAtMs(request.candles, request.timeframe);
-      if (latestClosedBarAtMs === null) return jsonError('invalid_candle_cutoff', 'Latest candle close timestamp could not be derived from the requested timeframe.', 400);
+      if (latestClosedBarAtMs === null) return jsonError('invalid_candle_cutoff', 'Latest candle close timestamp could not be derived from the requested timeframe.', 400, c.get('requestId'));
       const report = buildTechnicalAnalysisSnapshot({
         candles: request.candles,
         symbol: request.symbol,
@@ -179,10 +182,10 @@ export function createResearchApi(options: { token: string; now?: () => number; 
       });
       return c.json({ contractVersion: LOCAL_RESEARCH_API_CONTRACT, report, trust: { providerAuthenticated: false, datasetFingerprintComputed: true, datasetFingerprintVerified: false, datasetSha256, researchCandidateHandoffAllowed: false, executionAuthority: 'none' } });
     } catch {
-      return jsonError('analysis_failed', 'Analysis failed; no decision or execution authority was produced.', 500);
+      return jsonError('analysis_failed', 'Analysis failed; no decision or execution authority was produced.', 500, c.get('requestId'));
     }
   });
-  app.notFound(() => jsonError('not_found', 'Route does not exist.', 404));
-  app.onError(() => jsonError('internal_error', 'Request could not be completed safely.', 500));
+  app.notFound((c) => jsonError('not_found', 'Route does not exist.', 404, c.get('requestId')));
+  app.onError((_error, c) => jsonError('internal_error', 'Request could not be completed safely.', 500, c.get('requestId')));
   return app;
 }

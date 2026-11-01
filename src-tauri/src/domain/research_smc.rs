@@ -450,8 +450,7 @@ pub fn assess_fvg_lifecycle(
         let mut partial_emitted = false;
         let mut full_emitted = false;
         let mut inversion_emitted = false;
-        for index in (gap.formed_at_index + 1)..candles.len() {
-            let candle = &candles[index];
+        for (index, candle) in candles.iter().enumerate().skip(gap.formed_at_index + 1) {
             let (touches_zone, fully_filled, closes_beyond) = if gap.direction == "bullish" {
                 (
                     candle.low <= gap.upper && candle.high >= gap.lower,

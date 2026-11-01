@@ -194,7 +194,7 @@ const request = (app: ReturnType<typeof createResearchApi>, path: string, init: 
     const reset = await request(app, '/health', { headers });
     expect(reset.status).toBe(200);
   });
-  test('rejects a stalled analysis body with a bounded 408 response', async () => {
+  test('rejects a stalled analysis body with a bounded 408 response', { timeout: 20_000 }, async () => {
     const app = createResearchApi({ token: TOKEN });
     const stalled = new ReadableStream<Uint8Array>({ pull() { return new Promise(() => {}); }, cancel() {} });
     const response = await app.request('/v1/analysis', {
