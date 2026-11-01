@@ -797,6 +797,33 @@ export interface Mt5RiskSizingRequest {
   riskPercent: number;
 }
 
+export interface Mt5RiskDecisionReceipt {
+  decisionId: string;
+  brokerServer: string;
+  accountLogin: string;
+  symbol: string;
+  decision: 'SIZED_WITH_LIMITATIONS' | 'BLOCKED' | string;
+  sequence: number;
+  decidedAtMs: number;
+  requestSha256: string;
+  resultSha256: string;
+  snapshotSequence: number;
+  specificationRevision: number;
+  specificationFingerprintSha256: string;
+  previousSha256: string;
+  eventSha256: string;
+}
+
+export interface Mt5RiskDecisionLedgerStatus {
+  valid: boolean;
+  brokerServer: string;
+  accountLogin: string;
+  eventCount: number;
+  headSha256: string;
+  firstInvalidSequence: number | null;
+  integrityError: string | null;
+}
+
 export interface Mt5RiskSizingResult {
   decision: 'SIZED_WITH_LIMITATIONS' | 'BLOCKED' | string;
   reasons: string[];
@@ -855,6 +882,7 @@ export interface Mt5RiskSizingResult {
   contractCompleteness: string;
   calculatedAtMs: number;
   snapshotSequence: number;
+  auditReceipt: Mt5RiskDecisionReceipt;
 }
 
 export interface Mt5SessionWindow {

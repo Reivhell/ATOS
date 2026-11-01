@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Activity, AlertTriangle, CheckCircle2, CircleSlash, Copy, Database, EyeOff, LockKeyhole, Network, RefreshCw, ShieldCheck, Wifi, WifiOff } from 'lucide-svelte';
-  import { getMt5BridgeSetup, getMt5BridgeStatus, getMt5InstrumentSpecification, getMt5SessionCalendar, calculateMt5RiskSizing, queryMt5MarketDataSeries } from '../adapters/tauri/bridge';
-  import type { Mt5BridgeSetup, Mt5BridgeStatus, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5SeriesQuery, Mt5SeriesQueryResponse, Mt5StoredBar } from '../types';
+  import { getMt5BridgeSetup, getMt5BridgeStatus, getMt5InstrumentSpecification, getMt5SessionCalendar, calculateMt5RiskSizing, getMt5RiskDecisionLedgerStatus, queryMt5MarketDataSeries } from '../adapters/tauri/bridge';
+  import type { Mt5BridgeSetup, Mt5BridgeStatus, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5RiskDecisionLedgerStatus, Mt5SeriesQuery, Mt5SeriesQueryResponse, Mt5StoredBar } from '../types';
 
   let status: Mt5BridgeStatus | null = null;
   let setup: Mt5BridgeSetup | null = null;
@@ -34,6 +34,9 @@
   let riskSizingError = '';
   let riskSizingResult: Mt5RiskSizingResult | null = null;
   let riskSizingResultStale = false;
+  let riskDecisionLedgerStatus: Mt5RiskDecisionLedgerStatus | null = null;
+  let riskDecisionLedgerLoading = false;
+  let riskDecisionLedgerError = '';
   $: riskSizingResultStale = !!riskSizingResult && (
     !status?.connected || status.stale || status.quoteStale
     || status.lastSequence !== riskSizingResult.snapshotSequence
@@ -145,6 +148,27 @@
     }
   }
 
+  async function inspectRiskDecisionLedger() {
+    if (riskDecisionLedgerLoading) return;
+    if (!status?.accountServer || !status.accountLogin) {
+      riskDecisionLedgerError = 'An authenticated MT5 account is required to verify its risk-decision ledger.';
+      return;
+    }
+    riskDecisionLedgerLoading = true;
+    riskDecisionLedgerError = '';
+    try {
+      riskDecisionLedgerStatus = await getMt5RiskDecisionLedgerStatus(
+        status.accountServer,
+        status.accountLogin
+      );
+    } catch (cause) {
+      riskDecisionLedgerStatus = null;
+      riskDecisionLedgerError = cause instanceof Error ? cause.message : String(cause);
+    } finally {
+      riskDecisionLedgerLoading = false;
+    }
+  }
+
   async function calculateRiskSizing() {
     if (riskSizingLoading) return;
     if (!status?.accountLogin || !status.accountServer || !seriesSymbol.trim()) {
@@ -160,12 +184,15 @@
     riskSizingLoading = true;
     riskSizingError = '';
     riskSizingResult = null;
+    riskDecisionLedgerStatus = null;
+    riskDecisionLedgerError = '';
     try {
       const request: Mt5RiskSizingRequest = {
         brokerServer: status.accountServer, accountLogin: status.accountLogin,
         symbol: seriesSymbol.trim(), side: riskSide, stopLossPrice, riskPercent: riskPercentValue
       };
       riskSizingResult = await calculateMt5RiskSizing(request);
+      await inspectRiskDecisionLedger();
     } catch (cause) {
       riskSizingError = cause instanceof Error ? cause.message : String(cause);
     } finally {
@@ -300,6 +327,7 @@
         <label>Stop-loss price<input bind:value={riskStopLoss} oninput={() => riskSizingResult = null} inputmode="decimal" placeholder="Broker price, e.g. 2300.00" autocomplete="off" /></label>
         <label>Equity risk %<input bind:value={riskPercent} oninput={() => riskSizingResult = null} inputmode="decimal" placeholder="1.0" autocomplete="off" /></label>
         <button class="button-primary" onclick={calculateRiskSizing} disabled={riskSizingLoading || !status?.connected || !status?.accountLogin || !status?.accountServer || !seriesSymbol.trim()}>{riskSizingLoading ? 'Calculating…' : 'Calculate risk-sized volume'}</button>
+        <button class="button-secondary" onclick={inspectRiskDecisionLedger} disabled={riskDecisionLedgerLoading || !status?.accountLogin || !status?.accountServer}>{riskDecisionLedgerLoading ? 'Verifying…' : 'Verify risk-decision chain'}</button>
       </div>
       {#if riskSizingError}<div class="mt5-alert danger"><AlertTriangle size={16}/><div><strong>Risk sizing blocked</strong><p>{riskSizingError}</p></div></div>{/if}
       {#if riskSizingResult}
@@ -325,6 +353,16 @@
           </div>
           {#if riskSizingResult.reasons.length > 0}<div class="mt5-alert danger"><AlertTriangle size={16}/><div><strong>Blocking conditions</strong>{#each riskSizingResult.reasons as reason}<p>{reason}</p>{/each}</div></div>{/if}
           <div class="mt5-manifest"><small>Account snapshot sequence {riskSizingResult.snapshotSequence} · contract revision {riskSizingResult.specificationRevision} · {riskSizingResult.contractCompleteness} · SHA-256</small><code>{riskSizingResult.specificationFingerprintSha256}</code></div>
+          <div class="mt5-manifest"><small>Durable risk-decision receipt · sequence {riskSizingResult.auditReceipt.sequence} · {riskSizingResult.auditReceipt.decisionId}</small><code>{riskSizingResult.auditReceipt.eventSha256}</code></div>
+          {#if riskDecisionLedgerError}<div class="mt5-alert danger"><AlertTriangle size={16}/><div><strong>Ledger verification unavailable</strong><p>{riskDecisionLedgerError}</p></div></div>{/if}
+          {#if riskDecisionLedgerStatus}
+            <div class="mt5-manifest">
+              <small>Account risk-decision chain · {riskDecisionLedgerStatus.eventCount} event(s)</small>
+              <strong>{riskDecisionLedgerStatus.valid ? 'INTEGRITY VERIFIED' : 'INTEGRITY FAILURE'}</strong>
+              <code>{riskDecisionLedgerStatus.headSha256}</code>
+              {#if riskDecisionLedgerStatus.integrityError}<span>{riskDecisionLedgerStatus.integrityError}</span>{/if}
+            </div>
+          {/if}
           <p class="mt5-quality-note">{riskSizingResult.marginEstimation}. {riskSizingResult.commissionEstimation}. This result is not an order, does not reserve margin, and does not guarantee the realized loss. No live or paper order is submitted.</p>
           <div class="mt5-manifest"><small>Calculation limitations</small>{#each riskSizingResult.limitations as limitation}<span>{limitation}</span>{/each}</div>
         </div>

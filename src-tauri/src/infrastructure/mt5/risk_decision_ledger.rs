@@ -437,7 +437,7 @@ fn validate_record(record: &Mt5RiskDecisionRecord) -> Result<(String, String), S
     Ok((request_json, result_json))
 }
 
-pub fn append(
+pub(crate) fn append(
     path: &Path,
     record: &Mt5RiskDecisionRecord,
 ) -> Result<Mt5RiskDecisionReceipt, String> {
@@ -512,6 +512,13 @@ pub fn append(
     transaction
         .commit()
         .map_err(|error| format!("Risk-decision event commit failed: {error}"))?;
+    let committed_chain = verify_chain(&connection, &record.broker_server, &record.account_login)?;
+    if !committed_chain.valid
+        || committed_chain.event_count != sequence
+        || committed_chain.head_sha256 != event_hash
+    {
+        return Err("Committed risk-decision receipt did not verify against the durable account chain.".into());
+    }
 
     Ok(Mt5RiskDecisionReceipt {
         decision_id,
@@ -531,7 +538,7 @@ pub fn append(
     })
 }
 
-pub fn status(
+pub(crate) fn status(
     path: &Path,
     broker_server: &str,
     account_login: &str,
@@ -669,6 +676,7 @@ mod tests {
         assert!(!status.valid);
         assert_eq!(status.first_invalid_sequence, Some(1));
         assert!(status.integrity_error.unwrap().contains("payload hash"));
+        assert!(append(&path, &sample_record("12345", "BLOCKED", 2)).is_err());
         let _ = std::fs::remove_file(path);
     }
 

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { assertNativeRuntime } from './native-runtime-guard.js';
-import type { AuditEvent, BacktestRequest, BacktestResult, CandleSeriesRequest, CandleSeriesResponse, CreateStrictWorkPlanRequest, CreateResearchHypothesisRequest, DashboardSnapshot, MarketDataProviderCatalogEntry, UnifiedMarketDataQuery, UnifiedMarketDataResult, Mt5BridgeStatus, Mt5BridgeSetup, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5SeriesQuery, Mt5SeriesQueryResponse, PlaceOrderRequest, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, ResearchWorkflowRequest, RiskLimits, StrictAnalysisWorkPlan, MemeCoinHunterReport, MemeCoinHunterSecurityStatus, StrictAuditChainStatus, StrictCompletionRequest, StrictCompletionResult } from '../../types';
+import type { AuditEvent, BacktestRequest, BacktestResult, CandleSeriesRequest, CandleSeriesResponse, CreateStrictWorkPlanRequest, CreateResearchHypothesisRequest, DashboardSnapshot, MarketDataProviderCatalogEntry, UnifiedMarketDataQuery, UnifiedMarketDataResult, Mt5BridgeStatus, Mt5BridgeSetup, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5RiskDecisionLedgerStatus, Mt5SeriesQuery, Mt5SeriesQueryResponse, PlaceOrderRequest, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, ResearchWorkflowRequest, RiskLimits, StrictAnalysisWorkPlan, MemeCoinHunterReport, MemeCoinHunterSecurityStatus, StrictAuditChainStatus, StrictCompletionRequest, StrictCompletionResult } from '../../types';
 
 export const isDesktopRuntime = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -67,6 +67,20 @@ export async function calculateMt5RiskSizing(request: Mt5RiskSizingRequest): Pro
   if (!Number.isFinite(request.riskPercent) || request.riskPercent < 0.01 || request.riskPercent > 5) throw new RangeError('Risk percentage must be between 0.01 and 5.');
   if (!['BUY', 'SELL'].includes(request.side)) throw new TypeError('Side must be BUY or SELL.');
   return invoke<Mt5RiskSizingResult>('calculate_mt5_risk_sizing', { request });
+}
+
+export async function getMt5RiskDecisionLedgerStatus(
+  brokerServer: string,
+  accountLogin: string
+): Promise<Mt5RiskDecisionLedgerStatus> {
+  requireDesktopRuntime('MT5 risk-decision ledger');
+  if (typeof brokerServer !== 'string' || brokerServer.trim().length === 0 || brokerServer.length > 128
+    || typeof accountLogin !== 'string' || accountLogin.trim().length === 0 || accountLogin.length > 32) {
+    throw new TypeError('A valid authenticated broker and account identity is required.');
+  }
+  return invoke<Mt5RiskDecisionLedgerStatus>('get_mt5_risk_decision_ledger_status', {
+    brokerServer, accountLogin
+  });
 }
 
 export async function queryMt5MarketDataSeries(request: Mt5SeriesQuery): Promise<Mt5SeriesQueryResponse> {
