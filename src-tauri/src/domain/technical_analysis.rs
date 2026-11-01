@@ -303,6 +303,117 @@ pub fn calculate_readings(candles: &[Candle]) -> Result<Vec<IndicatorReading>, S
     ])
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeIndicatorSignal {
+    pub domain: String,
+    pub direction: String,
+    pub signal_strength: f64,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeIndicatorSignalSnapshot {
+    pub contract_version: String,
+    pub candle_count: usize,
+    pub metrics: serde_json::Value,
+    pub signals: Vec<NativeIndicatorSignal>,
+}
+
+fn native_signal(domain: &str, direction: &str, strength: f64, evidence_refs: Vec<String>) -> NativeIndicatorSignal {
+    NativeIndicatorSignal {
+        domain: domain.into(),
+        direction: direction.into(),
+        signal_strength: strength.clamp(0.0, 1.0),
+        evidence_refs,
+    }
+}
+
+pub fn calculate_signal_snapshot(candles: &[Candle]) -> Result<NativeIndicatorSignalSnapshot, String> {
+    if candles.len() > MAX_CANDLES {
+        return Err(format!("Signal input exceeds the {MAX_CANDLES}-candle safety limit."));
+    }
+    let mut previous_time = None;
+    for (index, candle) in candles.iter().enumerate() {
+        if candle.time <= 0 || previous_time.is_some_and(|previous| candle.time <= previous) {
+            return Err(format!("Signal candle {} timestamp must be positive and strictly increasing.", index + 1));
+        }
+        previous_time = Some(candle.time);
+        if ![candle.open, candle.high, candle.low, candle.close, candle.volume].iter().all(|value| value.is_finite())
+            || candle.open <= 0.0 || candle.high <= 0.0 || candle.low <= 0.0 || candle.close <= 0.0
+            || candle.volume < 0.0
+            || candle.high < candle.open.max(candle.close).max(candle.low)
+            || candle.low > candle.open.min(candle.close).min(candle.high)
+        {
+            return Err(format!("Signal candle {} violates OHLCV invariants.", index + 1));
+        }
+    }
+
+    let closes: Vec<f64> = candles.iter().map(|candle| candle.close).collect();
+    let close = closes.last().copied();
+    let sma_fast = sma(&closes, 9);
+    let sma_slow = sma(&closes, 21);
+    let ema20 = ema_series(&closes, 20).last().copied().flatten();
+    let rsi14 = rsi(&closes, 14);
+    let macd_value = if closes.len() >= 34 {
+        let fast = ema_series(&closes, 12);
+        let slow = ema_series(&closes, 26);
+        let line_values: Vec<f64> = (25..closes.len())
+            .filter_map(|index| Some(fast.get(index).copied().flatten()? - slow.get(index).copied().flatten()?))
+            .collect();
+        let signal_line = ema_series(&line_values, 9).last().copied().flatten();
+        line_values.last().copied().zip(signal_line).map(|(line, signal)| (line, signal, line - signal))
+    } else {
+        None
+    };
+    let atr14 = atr(candles, 14);
+    let bands = bollinger(&closes, 20);
+    let computed = [close, sma_fast, sma_slow, ema20, rsi14, atr14].into_iter().flatten().all(f64::is_finite)
+        && macd_value.is_none_or(|v| v.0.is_finite() && v.1.is_finite() && v.2.is_finite())
+        && bands.is_none_or(|v| v.0.is_finite() && v.1.is_finite() && v.2.is_finite());
+    if !computed {
+        return Err("Indicator signal arithmetic exceeded the supported numeric range.".into());
+    }
+
+    let mut signals = Vec::with_capacity(3);
+    if let (Some(fast), Some(slow), Some(last_close)) = (sma_fast, sma_slow, close.filter(|value| *value > 0.0)) {
+        let spread = (fast - slow) / last_close;
+        let direction = if spread > 0.0 { "bullish" } else if spread < 0.0 { "bearish" } else { "neutral" };
+        signals.push(native_signal("trend", direction, (0.55 + spread.abs() * 8.0).min(0.95),
+            vec![format!("sma9={fast}"), format!("sma21={slow}")]));
+    }
+    if let (Some((_, _, histogram)), Some(rsi_value), Some(last_close)) = (macd_value, rsi14, close.filter(|value| *value > 0.0)) {
+        let direction = if histogram > 0.0 && rsi_value >= 52.0 { "bullish" }
+            else if histogram < 0.0 && rsi_value <= 48.0 { "bearish" } else { "neutral" };
+        let strength = if direction == "neutral" { 0.55 }
+            else { (0.6 + (rsi_value - 50.0).abs() / 160.0 + (histogram / last_close).abs() * 10.0).min(0.9) };
+        signals.push(native_signal("momentum", direction, strength,
+            vec![format!("macdHistogram={histogram}"), format!("rsi14={rsi_value}")]));
+    }
+    if let (Some(last_close), Some((_, middle, _))) = (close.filter(|value| *value > 0.0), bands) {
+        let spread = (last_close - middle) / last_close;
+        let direction = if spread > 0.0 { "bullish" } else if spread < 0.0 { "bearish" } else { "neutral" };
+        signals.push(native_signal("location", direction, (0.55 + spread.abs() * 8.0).min(0.85),
+            vec![format!("close={last_close}"), format!("bollingerMiddle={middle}")]));
+    }
+
+    Ok(NativeIndicatorSignalSnapshot {
+        contract_version: "technical-indicator-signals.v1".into(),
+        candle_count: candles.len(),
+        metrics: serde_json::json!({
+            "close": close, "smaFast": sma_fast, "smaSlow": sma_slow, "ema20": ema20,
+            "rsi14": rsi14, "atr14": atr14,
+            "atrPct": atr14.zip(close.filter(|value| *value > 0.0)).map(|(atr, close)| atr / close * 100.0),
+            "macdLine": macd_value.map(|value| value.0), "macdSignal": macd_value.map(|value| value.1),
+            "macdHistogram": macd_value.map(|value| value.2),
+            "bollingerUpper": bands.map(|value| value.0), "bollingerMiddle": bands.map(|value| value.1),
+            "bollingerLower": bands.map(|value| value.2)
+        }),
+        signals,
+    })
+}
+
 pub fn calculate_structure(candles: &[Candle]) -> Result<NativeStructureSnapshot, String> {
     if candles.len() > MAX_CANDLES {
         return Err(format!("Structure input exceeds the {MAX_CANDLES}-candle safety limit."));
@@ -400,6 +511,23 @@ mod tests {
     #[test]
     fn excessive_input_is_rejected() {
         assert!(calculate_readings(&candles(MAX_CANDLES + 1)).is_err());
+    }
+
+    #[test]
+    fn native_signal_snapshot_emits_bounded_indicator_domains() {
+        let result = calculate_signal_snapshot(&candles(100)).unwrap();
+        assert_eq!(result.contract_version, "technical-indicator-signals.v1");
+        assert!(result.signals.iter().any(|signal| signal.domain == "trend"));
+        assert!(result.signals.iter().any(|signal| signal.domain == "momentum"));
+        assert!(result.signals.iter().any(|signal| signal.domain == "location"));
+        assert!(result.signals.iter().all(|signal| signal.signal_strength.is_finite() && (0.0..=1.0).contains(&signal.signal_strength)));
+    }
+
+    #[test]
+    fn native_signal_snapshot_rejects_invalid_ohlcv() {
+        let mut rows = candles(40);
+        rows[4].high = 0.0;
+        assert!(calculate_signal_snapshot(&rows).unwrap_err().contains("OHLCV invariants"));
     }
 
     #[test]
