@@ -959,8 +959,7 @@ fn handle_connection(
         }
         validate_snapshot(&frame.snapshot)?;
         validate_market_data_scope(
-            &auth.account_login,
-            &auth.broker_server,
+            (&auth.account_login, &auth.broker_server),
             &frame.snapshot,
             &frame.market_data,
             &frame.session_schedules,
@@ -1184,8 +1183,7 @@ fn write_json_line(stream: &mut TcpStream, value: &serde_json::Value) -> Result<
 }
 
 fn validate_market_data_scope(
-    authenticated_login: &str,
-    authenticated_server: &str,
+    authenticated_account: (&str, &str),
     snapshot: &Mt5Snapshot,
     batch: &Mt5MarketDataBatch,
     session_schedules: &[Mt5SessionSchedule],
@@ -1193,8 +1191,8 @@ fn validate_market_data_scope(
     subscribed_symbols: &[String],
     subscribed_timeframes: &[String],
 ) -> Result<(), String> {
-    if snapshot.account.login != authenticated_login
-        || snapshot.account.server != authenticated_server
+    if snapshot.account.login != authenticated_account.0
+        || snapshot.account.server != authenticated_account.1
     {
         return Err("MT5 telemetry account identity changed after authentication; rejecting the session frame.".into());
     }
@@ -2404,8 +2402,7 @@ mod tests {
             .collect();
         let valid = snapshot();
         assert!(validate_market_data_scope(
-            "12345",
-            "Broker-Live",
+            ("12345", "Broker-Live"),
             &valid,
             &Mt5MarketDataBatch::default(),
             &schedules,
@@ -2430,8 +2427,7 @@ mod tests {
         );
 
         assert!(validate_market_data_scope(
-            "99999",
-            "Broker-Live",
+            ("99999", "Broker-Live"),
             &valid,
             &Mt5MarketDataBatch::default(),
             &schedules,
@@ -2441,8 +2437,7 @@ mod tests {
         )
         .is_err());
         assert!(validate_market_data_scope(
-            "12345",
-            "Other-Broker",
+            ("12345", "Other-Broker"),
             &valid,
             &Mt5MarketDataBatch::default(),
             &schedules,
@@ -2466,8 +2461,7 @@ mod tests {
             bars: Vec::new(),
         };
         assert!(validate_market_data_scope(
-            "12345",
-            "Broker-Live",
+            ("12345", "Broker-Live"),
             &valid,
             &out_of_scope_tick,
             &schedules,
@@ -2494,8 +2488,7 @@ mod tests {
             }],
         };
         assert!(validate_market_data_scope(
-            "12345",
-            "Broker-Live",
+            ("12345", "Broker-Live"),
             &valid,
             &out_of_scope_bar,
             &schedules,
@@ -2505,8 +2498,7 @@ mod tests {
         )
         .is_err());
         assert!(validate_market_data_scope(
-            "12345",
-            "Broker-Live",
+            ("12345", "Broker-Live"),
             &valid,
             &Mt5MarketDataBatch::default(),
             &schedules[..1],
