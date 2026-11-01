@@ -2872,6 +2872,20 @@ mod tests {
             &market
         ));
 
+        for source in [
+            "Binance public REST spoof",
+            "Binance public REST-extra",
+            "MT5 terminal",
+            "test-fixture",
+        ] {
+            let mut untrusted_market = market.clone();
+            untrusted_market.source = source.into();
+            assert!(
+                !has_registered_evidence_refs(std::slice::from_ref(&valid), &untrusted_market),
+                "evidence reference resolved against untrusted source label: {source}"
+            );
+        }
+
         for reference in [
             format!("snapshot:{digest}:mt5:BTCUSDT/1h/1798000000000"),
             format!("snapshot:{digest}:rust-indicator:RSI/14"),
