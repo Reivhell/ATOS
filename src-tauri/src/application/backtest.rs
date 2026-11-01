@@ -1715,20 +1715,38 @@ mod tests {
 
     #[test]
     fn tournament_priority_uses_one_exact_order_for_selection_and_verification() {
-        let slightly_better_sharpe =
-            compare_tournament_candidate_priority(
-                TournamentCandidatePriority { sharpe: 1.0 + 1e-13, drawdown: 9.0, fast: 10, slow: 30 },
-                TournamentCandidatePriority { sharpe: 1.0, drawdown: 1.0, fast: 8, slow: 24 },
-            );
+        let slightly_better_sharpe = compare_tournament_candidate_priority(
+            TournamentCandidatePriority {
+                sharpe: 1.0 + 1e-13,
+                drawdown: 9.0,
+                fast: 10,
+                slow: 30,
+            },
+            TournamentCandidatePriority {
+                sharpe: 1.0,
+                drawdown: 1.0,
+                fast: 8,
+                slow: 24,
+            },
+        );
         assert!(
             slightly_better_sharpe.is_lt(),
             "a real Sharpe difference must not be swallowed by a tolerance"
         );
-        let lower_drawdown_tie =
-            compare_tournament_candidate_priority(
-                TournamentCandidatePriority { sharpe: 1.0, drawdown: 4.0, fast: 10, slow: 30 },
-                TournamentCandidatePriority { sharpe: 1.0, drawdown: 5.0, fast: 8, slow: 24 },
-            );
+        let lower_drawdown_tie = compare_tournament_candidate_priority(
+            TournamentCandidatePriority {
+                sharpe: 1.0,
+                drawdown: 4.0,
+                fast: 10,
+                slow: 30,
+            },
+            TournamentCandidatePriority {
+                sharpe: 1.0,
+                drawdown: 5.0,
+                fast: 8,
+                slow: 24,
+            },
+        );
         assert!(lower_drawdown_tie.is_lt());
         let lexicographic_tie =
             compare_tournament_candidate_priority(
