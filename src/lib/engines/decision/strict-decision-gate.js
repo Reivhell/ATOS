@@ -187,7 +187,7 @@ export function evaluateStrictDecisionGate(input) {
       const reviewedImplementationVersion = reviewedImplementations[trusted.id];
       if (!reviewedImplementationVersion) reasons.push(`No code-owned reviewed implementation version is registered for evaluated concept: ${trusted.id}.`);
       else if (assessment.implementationVersion !== reviewedImplementationVersion) reasons.push(`Required implementation version does not match the code-owned reviewed version: ${trusted.id}.`);
-      if (!nonEmptyString(assessment.dataSnapshotId)) reasons.push(`Evaluated concept lacks a data snapshot identifier: ${trusted.id}.`);
+      if (!validSha256(assessment.dataSnapshotId)) reasons.push(`Evaluated concept lacks a valid SHA-256 data snapshot identifier: ${trusted.id}.`);
       const assessmentSnapshotId = assessment.dataSnapshotId;
       const marketDatasetSha256 = marketData?.datasetSha256;
       if (typeof assessmentSnapshotId === 'string' && typeof marketDatasetSha256 === 'string'
