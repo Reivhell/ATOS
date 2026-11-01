@@ -10,7 +10,7 @@ use crate::infrastructure::mt5::{
         Mt5MarginPreflightResult, Mt5PendingOrderSnapshot, Mt5PositionSnapshot, Mt5Snapshot,
     },
     market_data::{
-        Mt5InstrumentSpecificationRecord, Mt5RiskDecisionRecord, Mt5RiskDecisionReceipt,
+        Mt5InstrumentSpecificationRecord, Mt5RiskDecisionReceipt, Mt5RiskDecisionRecord,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -663,8 +663,9 @@ pub fn calculate(
         "stopLossPrice": request.stop_loss_price,
         "riskPercent": request.risk_percent
     });
-    let result_payload = serde_json::to_value(&result)
-        .map_err(|error| format!("Risk-sizing result could not be canonicalized for audit: {error}"))?;
+    let result_payload = serde_json::to_value(&result).map_err(|error| {
+        format!("Risk-sizing result could not be canonicalized for audit: {error}")
+    })?;
     let receipt = bridge.append_risk_decision(&Mt5RiskDecisionRecord {
         broker_server: broker_server.to_string(),
         account_login: account_login.to_string(),

@@ -8,8 +8,7 @@ use uuid::Uuid;
 
 const LEDGER_SCHEMA_VERSION: i64 = 1;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
-const GENESIS_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+const GENESIS_SHA256: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_LEDGER_EVENTS_PER_ACCOUNT: u64 = 1_000_000;
 const MAX_AUDIT_PAYLOAD_BYTES: usize = 256 * 1024;
 
@@ -62,9 +61,9 @@ pub struct Mt5RiskDecisionLedgerStatus {
 fn open_connection(path: &Path) -> Result<Connection, String> {
     let connection = Connection::open(path)
         .map_err(|error| format!("MT5 risk-decision database could not be opened: {error}"))?;
-    connection.busy_timeout(BUSY_TIMEOUT).map_err(|error| {
-        format!("MT5 risk-decision database busy timeout failed: {error}")
-    })?;
+    connection
+        .busy_timeout(BUSY_TIMEOUT)
+        .map_err(|error| format!("MT5 risk-decision database busy timeout failed: {error}"))?;
     connection
         .execute_batch("PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")
         .map_err(|error| format!("MT5 risk-decision durability settings failed: {error}"))?;
@@ -262,9 +261,9 @@ fn verify_chain(
         let snapshot_sequence: i64 = row
             .get(9)
             .map_err(|error| format!("Risk-decision snapshot sequence is unreadable: {error}"))?;
-        let specification_revision: i64 = row
-            .get(10)
-            .map_err(|error| format!("Risk-decision specification revision is unreadable: {error}"))?;
+        let specification_revision: i64 = row.get(10).map_err(|error| {
+            format!("Risk-decision specification revision is unreadable: {error}")
+        })?;
         let specification_hash: String = row
             .get(11)
             .map_err(|error| format!("Risk-decision specification hash is unreadable: {error}"))?;
@@ -344,7 +343,9 @@ fn verify_chain(
             || result.get("snapshotSequence").and_then(Value::as_u64) != Some(snapshot_sequence)
             || result.get("specificationRevision").and_then(Value::as_u64)
                 != Some(specification_revision)
-            || result.get("specificationFingerprintSha256").and_then(Value::as_str)
+            || result
+                .get("specificationFingerprintSha256")
+                .and_then(Value::as_str)
                 != Some(specification_hash.as_str())
             || result.get("calculatedAtMs").and_then(Value::as_i64) != Some(decided_at_ms)
         {
@@ -418,9 +419,11 @@ fn validate_record(record: &Mt5RiskDecisionRecord) -> Result<(String, String), S
         || record.result.get("accountLogin").and_then(Value::as_str)
             != Some(record.account_login.as_str())
         || record.result.get("symbol").and_then(Value::as_str) != Some(record.symbol.as_str())
-        || record.result.get("decision").and_then(Value::as_str)
-            != Some(record.decision.as_str())
-        || record.result.get("snapshotSequence").and_then(Value::as_u64)
+        || record.result.get("decision").and_then(Value::as_str) != Some(record.decision.as_str())
+        || record
+            .result
+            .get("snapshotSequence")
+            .and_then(Value::as_u64)
             != Some(record.snapshot_sequence)
         || record.result.get("specificationRevision").and_then(Value::as_u64)
             != Some(record.specification_revision)
@@ -429,8 +432,7 @@ fn validate_record(record: &Mt5RiskDecisionRecord) -> Result<(String, String), S
             .get("specificationFingerprintSha256")
             .and_then(Value::as_str)
             != Some(record.specification_fingerprint_sha256.as_str())
-        || record.result.get("calculatedAtMs").and_then(Value::as_i64)
-            != Some(record.decided_at_ms)
+        || record.result.get("calculatedAtMs").and_then(Value::as_i64) != Some(record.decided_at_ms)
     {
         return Err("Risk-decision request/result identity is not bound to the authenticated account snapshot.".into());
     }
@@ -517,7 +519,10 @@ pub(crate) fn append(
         || committed_chain.event_count != sequence
         || committed_chain.head_sha256 != event_hash
     {
-        return Err("Committed risk-decision receipt did not verify against the durable account chain.".into());
+        return Err(
+            "Committed risk-decision receipt did not verify against the durable account chain."
+                .into(),
+        );
     }
 
     Ok(Mt5RiskDecisionReceipt {
@@ -544,7 +549,10 @@ pub(crate) fn status(
     account_login: &str,
 ) -> Result<Mt5RiskDecisionLedgerStatus, String> {
     if !valid_identity(broker_server, 128) || !valid_identity(account_login, 32) {
-        return Err("Risk-decision ledger status requires a valid broker server and account identity.".into());
+        return Err(
+            "Risk-decision ledger status requires a valid broker server and account identity."
+                .into(),
+        );
     }
     let connection = open_connection(path)?;
     verify_chain(&connection, broker_server, account_login)
@@ -561,7 +569,7 @@ mod tests {
     }
 
     fn initialized_path() -> std::path::PathBuf {
-        let path = initialized_path();
+        let path = temp_path();
         let connection = open_connection(&path).unwrap();
         initialize(&connection).unwrap();
         drop(connection);
@@ -605,14 +613,7 @@ mod tests {
     #[test]
     fn append_records_both_approved_and_blocked_decisions_in_one_account_chain() {
         let path = initialized_path();
-        let connection = open_connection(&path).unwrap();
-        initialize(&connection).unwrap();
-        drop(connection);
-        let approved = append(
-            &path,
-            &sample_record("12345", "SIZED_WITH_LIMITATIONS", 7),
-        )
-        .unwrap();
+        let approved = append(&path, &sample_record("12345", "SIZED_WITH_LIMITATIONS", 7)).unwrap();
         let blocked = append(&path, &sample_record("12345", "BLOCKED", 8)).unwrap();
         assert_eq!(approved.sequence, 1);
         assert_eq!(approved.previous_sha256, GENESIS_SHA256);
@@ -654,11 +655,17 @@ mod tests {
         let path = initialized_path();
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         let connection = Connection::open(&path).unwrap();
-        assert!(connection.execute(
-            "UPDATE mt5_risk_decision_events SET decision='SIZED_WITH_LIMITATIONS'",
-            []
-        ).is_err());
-        assert!(connection.execute("DELETE FROM mt5_risk_decision_events", []).is_err());
+        assert!(
+            connection
+                .execute(
+                    "UPDATE mt5_risk_decision_events SET decision='SIZED_WITH_LIMITATIONS'",
+                    []
+                )
+                .is_err()
+        );
+        assert!(connection
+            .execute("DELETE FROM mt5_risk_decision_events", [])
+            .is_err());
         assert!(status(&path, "Broker-Live", "12345").unwrap().valid);
         let _ = std::fs::remove_file(path);
     }
@@ -668,10 +675,12 @@ mod tests {
         let path = initialized_path();
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch(
-            "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
-             UPDATE mt5_risk_decision_events SET result_json='{}';"
-        ).unwrap();
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
+             UPDATE mt5_risk_decision_events SET result_json='{}';",
+            )
+            .unwrap();
         let status = status(&path, "Broker-Live", "12345").unwrap();
         assert!(!status.valid);
         assert_eq!(status.first_invalid_sequence, Some(1));
@@ -682,7 +691,7 @@ mod tests {
 
     #[test]
     fn concurrent_account_appends_receive_unique_contiguous_sequences() {
-        let path = Arc::new(temp_path());
+        let path = Arc::new(initialized_path());
         let mut workers = Vec::new();
         for index in 0..8_u64 {
             let worker_path = Arc::clone(&path);
@@ -695,7 +704,10 @@ mod tests {
                 .sequence
             }));
         }
-        let mut sequences: Vec<u64> = workers.into_iter().map(|worker| worker.join().unwrap()).collect();
+        let mut sequences: Vec<u64> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
         sequences.sort_unstable();
         assert_eq!(sequences, (1..=8).collect::<Vec<_>>());
         let status = status(path.as_path(), "Broker-Live", "12345").unwrap();
