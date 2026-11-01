@@ -21,7 +21,7 @@ test('production UI receives indicator readings through a registered typed nativ
   assert.match(commands, /calculate_technical_indicator_readings/);
   assert.match(bootstrap, /commands::calculate_technical_indicator_readings/);
   assert.match(bridge, /invoke<TechnicalIndicatorReading\[]>\('calculate_technical_indicator_readings'/);
-  assert.match(app, /await calculateTechnicalIndicatorReadings\(series\.candles\)/);
+  assert.match(app, /calculateTechnicalIndicatorReadings\(series\.candles\)/);
   assert.doesNotMatch(app, /technicalReadings = technicalEnvelope\.indicatorReadings/);
   assert.match(app, /indicatorRequestEpoch/);
 });
