@@ -369,7 +369,7 @@ pub fn calculate(
                         quote_age = preflight_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
                         entry = if side == "BUY" { snapshot.symbol.ask } else { snapshot.symbol.bid };
                         stop_distance = if side == "BUY" { entry - request.stop_loss_price } else { request.stop_loss_price - entry };
-                        if quote_age < 0 || quote_age > MAX_QUOTE_AGE_MS || !stop_distance.is_finite() || stop_distance <= 0.0 {
+                        if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) || !stop_distance.is_finite() || stop_distance <= 0.0 {
                             reasons.push("The correlated account frame no longer contains a fresh quote with the requested stop on the loss side; refresh and retry.".into());
                         }
                         let native_loss = result.loss_at_stop_loss.unwrap_or(f64::NAN);
@@ -403,7 +403,7 @@ pub fn calculate(
                                                 quote_age = corrected_checked_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
                                                 entry = if side == "BUY" { snapshot.symbol.ask } else { snapshot.symbol.bid };
                                                 stop_distance = if side == "BUY" { entry - request.stop_loss_price } else { request.stop_loss_price - entry };
-                                                if quote_age < 0 || quote_age > MAX_QUOTE_AGE_MS || !stop_distance.is_finite() || stop_distance <= 0.0 {
+                                                if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) || !stop_distance.is_finite() || stop_distance <= 0.0 {
                                                     reasons.push("The corrected-volume snapshot no longer contains a fresh quote with the requested stop on the loss side; approval is blocked.".into());
                                                 }
                                                 let corrected_loss = rechecked.loss_at_stop_loss.unwrap_or(f64::NAN);
@@ -574,7 +574,7 @@ pub fn calculate(
     // frame and evaluate freshness at completion, not at function entry.
     let completed_at_ms = chrono::Utc::now().timestamp_millis();
     quote_age = completed_at_ms.saturating_sub(snapshot.symbol.quote_time_ms);
-    if quote_age < 0 || quote_age > MAX_QUOTE_AGE_MS {
+    if !(0..=MAX_QUOTE_AGE_MS).contains(&quote_age) {
         reasons.push("The MT5 quote became future-dated or stale while risk sizing was being finalized; refresh and retry.".into());
     }
     let final_specification_age = completed_at_ms.saturating_sub(specification.last_observed_at_ms);
