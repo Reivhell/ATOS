@@ -2444,14 +2444,32 @@ mod tests {
         )
         .is_ok());
         assert!(
-            validate_scope("12345", "Broker-Live", &Mt5MarketDataBatch::default(), &[], 1)
+            validate_scope(
+                "12345",
+                "Broker-Live",
+                &Mt5MarketDataBatch::default(),
+                &[],
+                1
+            )
             .is_ok(),
             "transport may omit an unchanged calendar; the durable store verifies retained state"
         );
 
-        assert!(validate_scope("99999", "Broker-Live", &Mt5MarketDataBatch::default(), &schedules, 1)
+        assert!(validate_scope(
+            "99999",
+            "Broker-Live",
+            &Mt5MarketDataBatch::default(),
+            &schedules,
+            1
+        )
         .is_err());
-        assert!(validate_scope("12345", "Other-Broker", &Mt5MarketDataBatch::default(), &schedules, 1)
+        assert!(validate_scope(
+            "12345",
+            "Other-Broker",
+            &Mt5MarketDataBatch::default(),
+            &schedules,
+            1
+        )
         .is_err());
 
         let out_of_scope_tick = Mt5MarketDataBatch {
@@ -2467,8 +2485,7 @@ mod tests {
             }],
             bars: Vec::new(),
         };
-        assert!(validate_scope("12345", "Broker-Live", &out_of_scope_tick, &schedules, 1)
-        .is_err());
+        assert!(validate_scope("12345", "Broker-Live", &out_of_scope_tick, &schedules, 1).is_err());
 
         let out_of_scope_bar = Mt5MarketDataBatch {
             ticks: Vec::new(),
@@ -2486,12 +2503,23 @@ mod tests {
                 closed: true,
             }],
         };
-        assert!(validate_scope("12345", "Broker-Live", &out_of_scope_bar, &schedules, 1)
-        .is_err());
-        assert!(validate_scope("12345", "Broker-Live", &Mt5MarketDataBatch::default(), &schedules[..1], 1)
+        assert!(validate_scope("12345", "Broker-Live", &out_of_scope_bar, &schedules, 1).is_err());
+        assert!(validate_scope(
+            "12345",
+            "Broker-Live",
+            &Mt5MarketDataBatch::default(),
+            &schedules[..1],
+            1
+        )
         .is_err());
         assert!(
-            validate_scope("12345", "Broker-Live", &Mt5MarketDataBatch::default(), &schedules, MAX_SESSION_CALENDAR_AGE_MS + 2)
+            validate_scope(
+                "12345",
+                "Broker-Live",
+                &Mt5MarketDataBatch::default(),
+                &schedules,
+                MAX_SESSION_CALENDAR_AGE_MS + 2
+            )
             .is_err(),
             "cached broker calendars older than the one-hour ceiling must fail closed"
         );
