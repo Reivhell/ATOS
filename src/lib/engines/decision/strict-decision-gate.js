@@ -76,6 +76,22 @@ function validSha256(value) {
   return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
 }
 
+/** Evidence references are scoped to one exact dataset; this JS gate remains non-authoritative. */
+function canonicalEvidenceRefMatchesSnapshot(reference, snapshotSha256) {
+  if (typeof reference !== 'string' || typeof snapshotSha256 !== 'string') return false;
+  const match = /^snapshot:([a-f0-9]{64}):([A-Za-z0-9._~-]+):([A-Za-z0-9._~/-]+)$/i.exec(reference);
+  return Boolean(match)
+    && match[1].toLowerCase() === snapshotSha256.toLowerCase()
+    && !match[3].includes('..');
+}
+
+function hasCanonicalEvidenceRefs(refs, snapshotSha256) {
+  return Array.isArray(refs) && refs.length > 0
+    && refs.every((ref) => typeof ref === 'string' && ref.trim() === ref
+      && canonicalEvidenceRefMatchesSnapshot(ref, snapshotSha256))
+    && new Set(refs).size === refs.length;
+}
+
 /** @returns {CategoryCoverage} */
 function newCategoryCoverage() {
   return { required: 0, received: 0, evaluated: 0, unsupported: 0, insufficientData: 0, notApplicable: 0, missing: 0 };
@@ -162,8 +178,8 @@ export function evaluateStrictDecisionGate(input) {
     if (status === 'evaluated') {
       evaluated += 1;
       byCategory[trusted.category].evaluated += 1;
-      if (!Array.isArray(assessment.evidenceRefs) || assessment.evidenceRefs.length === 0 || assessment.evidenceRefs.some((ref) => !nonEmptyString(ref)) || new Set(assessment.evidenceRefs).size !== assessment.evidenceRefs.length) {
-        reasons.push(`Evaluated concept lacks evidence references: ${trusted.id}.`);
+      if (!hasCanonicalEvidenceRefs(assessment.evidenceRefs, marketData?.datasetSha256)) {
+        reasons.push(`Evaluated concept evidence references must be unique, canonical, and bound to the market-data snapshot: ${trusted.id}.`);
       }
       if (assessment.result === undefined || assessment.result === null) reasons.push(`Evaluated concept lacks an explicit result: ${trusted.id}.`);
       if (assessment.lookAheadSafe !== true) reasons.push(`Evaluated concept lacks explicit look-ahead safety confirmation: ${trusted.id}.`);
@@ -183,8 +199,8 @@ export function evaluateStrictDecisionGate(input) {
       notApplicable += 1;
       byCategory[trusted.category].notApplicable += 1;
       if (!meaningfulReason(assessment.reason)) reasons.push(`Not-applicable status requires a meaningful rationale: ${trusted.id}.`);
-      if (!Array.isArray(assessment.evidenceRefs) || assessment.evidenceRefs.length === 0 || assessment.evidenceRefs.some((ref) => !nonEmptyString(ref)) || new Set(assessment.evidenceRefs).size !== assessment.evidenceRefs.length) {
-        reasons.push(`Not-applicable status requires auditable contextual evidence: ${trusted.id}.`);
+      if (!hasCanonicalEvidenceRefs(assessment.evidenceRefs, marketData?.datasetSha256)) {
+        reasons.push(`Not-applicable evidence references must be unique, canonical, and bound to the market-data snapshot: ${trusted.id}.`);
       }
     } else if (status === 'insufficient_data') {
       insufficientData += 1;
