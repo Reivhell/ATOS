@@ -425,7 +425,10 @@ fn validate_record(record: &Mt5RiskDecisionRecord) -> Result<(String, String), S
             .get("snapshotSequence")
             .and_then(Value::as_u64)
             != Some(record.snapshot_sequence)
-        || record.result.get("specificationRevision").and_then(Value::as_u64)
+        || record
+            .result
+            .get("specificationRevision")
+            .and_then(Value::as_u64)
             != Some(record.specification_revision)
         || record
             .result
@@ -655,14 +658,12 @@ mod tests {
         let path = initialized_path();
         append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
         let connection = Connection::open(&path).unwrap();
-        assert!(
-            connection
-                .execute(
-                    "UPDATE mt5_risk_decision_events SET decision='SIZED_WITH_LIMITATIONS'",
-                    []
-                )
-                .is_err()
-        );
+        assert!(connection
+            .execute(
+                "UPDATE mt5_risk_decision_events SET decision='SIZED_WITH_LIMITATIONS'",
+                []
+            )
+            .is_err());
         assert!(connection
             .execute("DELETE FROM mt5_risk_decision_events", [])
             .is_err());
