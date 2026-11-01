@@ -25,3 +25,15 @@ test('production UI receives indicator readings through a registered typed nativ
   assert.doesNotMatch(app, /technicalReadings = technicalEnvelope\.indicatorReadings/);
   assert.match(app, /indicatorRequestEpoch/);
 });
+
+test('market structure summaries are calculated in Rust and rendered from the native response', () => {
+  assert.match(rust, /pub fn calculate_structure\(candles: &\[Candle\]\)/);
+  assert.match(rust, /classify_confirmed_swings\(candles, 2, 2\)/);
+  assert.match(rust, /detect_confirmed_structure_breaks\(candles, 2, 2\)/);
+  assert.match(commands, /calculate_native_market_structure/);
+  assert.match(bootstrap, /commands::calculate_native_market_structure/);
+  assert.match(bridge, /invoke<NativeStructureSnapshot>\('calculate_native_market_structure'/);
+  assert.match(app, /calculateNativeMarketStructure\(series\.candles\)/);
+  assert.match(app, /nativeStructure\?\.bias/);
+  assert.doesNotMatch(app, /<strong>\{technicalEnvelope\.structure\.bias\}<\/strong>/);
+});
