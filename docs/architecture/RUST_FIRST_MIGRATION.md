@@ -24,7 +24,7 @@ Rust is the source of truth for deterministic business behavior. The long-term t
 
 ## Current gap
 
-The first migration slice now calculates the six user-visible SMA, EMA, RSI, MACD, ATR, and Bollinger readings in `src-tauri/src/domain/technical_analysis.rs`; the Svelte view requests those readings through a typed Tauri command. Native tests cover valid data, insufficient history, malformed OHLCV, timestamp order, arithmetic overflow, and oversized input. The legacy JavaScript indicator implementation still runs inside the research-analysis engine and the application service still computes its compatibility reading array, so duplicate calculations and core decision logic remain to be migrated. This slice does not establish the 80/20 target.
+The native technical-analysis domain now calculates the six user-visible SMA, EMA, RSI, MACD, ATR, and Bollinger readings and calculates confirmed swing classifications and close-confirmed structure breaks through existing Rust SMC primitives. The Svelte view obtains both indicator readings and the structure summary through typed Tauri commands. The native boundary validates OHLCV invariants, positive/increasing timestamps, bounded candle count, and numeric overflow for indicators; structure inputs are validated before detector invocation. The JavaScript research-analysis engine still computes its own indicators, pivots, breaks, and research decision. The visible indicator cards and structure summary now use native results, but decision evaluation and duplicate legacy calculations remain to be migrated. This slice does not establish the 80/20 target.
 
 ## Completion criteria
 
