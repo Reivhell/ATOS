@@ -1041,10 +1041,12 @@ mod tests {
         append(&path, &sample_record("12345", "BLOCKED", 3)).unwrap();
         let final_receipt = append(&path, &sample_record("12345", "BLOCKED", 4)).unwrap();
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch(
-            "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
              DELETE FROM mt5_risk_decision_events WHERE sequence>=3;",
-        ).unwrap();
+            )
+            .unwrap();
         let truncated = verify_chain(&connection, "Broker-Live", "12345").unwrap();
         assert!(truncated.valid);
         assert_eq!(truncated.event_count, 2);
@@ -1104,7 +1106,11 @@ mod tests {
     fn weakened_immutability_trigger_fails_closed_on_reopen() {
         let path = initialized_path();
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch("DROP TRIGGER trg_mt5_risk_decision_events_no_update; CREATE TRIGGER trg_mt5_risk_decision_events_no_update BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(IGNORE); END;").unwrap();
+        connection.execute_batch(
+            "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
+             CREATE TRIGGER trg_mt5_risk_decision_events_no_update
+             BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(IGNORE); END;",
+        ).unwrap();
         assert!(initialize(&connection)
             .unwrap_err()
             .contains("differs from the required append-only policy"));
