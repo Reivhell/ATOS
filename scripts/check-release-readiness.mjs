@@ -126,7 +126,7 @@ else {
     'cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check',
     'cargo test --locked', 'cargo clippy --locked', 'bun run tauri build',
     'bun run release:evidence', 'bun run release:evidence:verify',
-    'node scripts/prepare-release-artifacts.mjs',
+    'bun run scripts/prepare-release-artifacts.mjs',
     'scripts/verify-release-attestation.mjs', 'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6',
     'anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c', 'sbom-path:', '--signer-workflow',
     '--source-ref', 'atos-release-staging/**', 'bun run eval:agents',
