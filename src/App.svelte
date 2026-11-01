@@ -984,7 +984,7 @@
                 <div><small>Signal domains</small><strong>{technicalEnvelope.decision.coverage.accepted} / {technicalEnvelope.decision.coverage.supplied}</strong></div>
                 <div><small>Research verdict</small><strong>{technicalEnvelope.decision.decision.replaceAll('_', ' ')}</strong></div>
               </div>
-              <div class="table-footnote"><strong>Structure:</strong> {technicalEnvelope.structure.bias} · {nativeStructure?.pivots.length ?? 0} Rust-confirmed pivots · {nativeStructure?.breaks.length ?? 0} Rust close-confirmed breaks.</div>
+              <div class="table-footnote"><strong>Structure:</strong> {#if nativeStructure}{nativeStructure.bias} · {nativeStructure.pivots.length} Rust-confirmed pivots · {nativeStructure.breaks.length} Rust close-confirmed breaks.{:else}Rust structure analysis unavailable; no native result is being substituted.{/if}</div>
               <div class="table-footnote"><strong>Temporal & anomaly audit:</strong> {technicalEnvelope.dataQuality.audit.status.toUpperCase()} · {technicalEnvelope.dataQuality.audit.hardIssues.length} integrity fault(s) · {technicalEnvelope.dataQuality.audit.warnings.length} advisory warning(s). Latest-bar warnings are review prompts, not proof of bad data; candidate handoff stays blocked while warnings remain.</div>
               {#if technicalEnvelope.dataQuality.issues.length}
                 <div class="warnings-list">{#each technicalEnvelope.dataQuality.issues.slice(0, 3) as issue}<div><ShieldAlert size={14}/><span>{issue}</span></div>{/each}</div>
