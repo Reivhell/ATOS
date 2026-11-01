@@ -2216,7 +2216,7 @@ where
     if market.timeframe != plan.timeframe {
         reasons.push("Market-data timeframe does not match the work-plan scope.".into());
     }
-    if market.dataset_sha256.to_ascii_lowercase() != plan.dataset_sha256 {
+    if !market.dataset_sha256.eq_ignore_ascii_case(&plan.dataset_sha256) {
         reasons.push("Market-data fingerprint does not match the work-plan snapshot.".into());
     }
     if market.as_of != plan.as_of {
@@ -2362,7 +2362,7 @@ where
                         trusted.id
                     ));
                 }
-                if assessment.data_snapshot_id.to_ascii_lowercase() != plan.dataset_sha256 {
+                if !assessment.data_snapshot_id.eq_ignore_ascii_case(&plan.dataset_sha256) {
                     reasons.push(format!(
                         "Assessment data snapshot does not match the work-plan snapshot: {}.",
                         trusted.id
@@ -3151,6 +3151,23 @@ mod tests {
         assert_eq!(result.coverage.unsupported, 357);
         assert!(result.next_layer_payload.is_none());
         assert!(!result.live_execution_authorized);
+    }
+
+    #[test]
+    fn snapshot_sha256_hex_case_does_not_change_digest_identity() {
+        let plan = sample_plan();
+        let mut req = request(plan.clone(), assessments_for(&plan));
+        req.market_data.dataset_sha256 = req.market_data.dataset_sha256.to_ascii_uppercase();
+        for assessment in &mut req.assessments {
+            if assessment.status == "evaluated" {
+                assessment.data_snapshot_id = assessment.data_snapshot_id.to_ascii_uppercase();
+            }
+        }
+        let result = evaluate_completion(req).unwrap();
+        assert!(!result.allowed, "catalog-only concepts must still block handoff");
+        assert!(!result.reasons.iter().any(|reason| reason.contains("fingerprint does not match the work-plan snapshot")));
+        assert!(!result.reasons.iter().any(|reason| reason.contains("Assessment data snapshot does not match")));
+        assert!(result.next_layer_payload.is_none());
     }
 
     #[test]
