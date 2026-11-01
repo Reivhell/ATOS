@@ -765,8 +765,7 @@ fn run_once(
                 cash = resulting_cash;
                 trade_pnls.push(trade_pnl);
                 quantity = 0.0;
-                entry_cash_spent = 0.0;
-                in_position = false;
+                        in_position = false;
             }
         }
         let equity = cash + quantity * price;
