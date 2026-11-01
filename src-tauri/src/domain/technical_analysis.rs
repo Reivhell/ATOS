@@ -379,6 +379,7 @@ pub fn calculate_signal_snapshot(candles: &[Candle]) -> Result<NativeIndicatorSi
     let mut signals = Vec::with_capacity(3);
     if let (Some(fast), Some(slow), Some(last_close)) = (sma_fast, sma_slow, close.filter(|value| *value > 0.0)) {
         let spread = (fast - slow) / last_close;
+        if !spread.is_finite() { return Err("Trend signal arithmetic exceeded the supported numeric range.".into()); }
         let direction = if spread > 0.0 { "bullish" } else if spread < 0.0 { "bearish" } else { "neutral" };
         signals.push(native_signal("trend", direction, (0.55 + spread.abs() * 8.0).min(0.95),
             vec![format!("sma9={fast}"), format!("sma21={slow}")]));
@@ -388,23 +389,29 @@ pub fn calculate_signal_snapshot(candles: &[Candle]) -> Result<NativeIndicatorSi
             else if histogram < 0.0 && rsi_value <= 48.0 { "bearish" } else { "neutral" };
         let strength = if direction == "neutral" { 0.55 }
             else { (0.6 + (rsi_value - 50.0).abs() / 160.0 + (histogram / last_close).abs() * 10.0).min(0.9) };
+        if !strength.is_finite() { return Err("Momentum signal arithmetic exceeded the supported numeric range.".into()); }
         signals.push(native_signal("momentum", direction, strength,
             vec![format!("macdHistogram={histogram}"), format!("rsi14={rsi_value}")]));
     }
     if let (Some(last_close), Some((_, middle, _))) = (close.filter(|value| *value > 0.0), bands) {
         let spread = (last_close - middle) / last_close;
+        if !spread.is_finite() { return Err("Location signal arithmetic exceeded the supported numeric range.".into()); }
         let direction = if spread > 0.0 { "bullish" } else if spread < 0.0 { "bearish" } else { "neutral" };
         signals.push(native_signal("location", direction, (0.55 + spread.abs() * 8.0).min(0.85),
             vec![format!("close={last_close}"), format!("bollingerMiddle={middle}")]));
     }
 
+    let atr_pct = atr14.zip(close.filter(|value| *value > 0.0)).map(|(atr, close)| atr / close * 100.0);
+    if atr_pct.is_some_and(|value| !value.is_finite()) {
+        return Err("ATR percentage exceeded the supported numeric range.".into());
+    }
     Ok(NativeIndicatorSignalSnapshot {
         contract_version: "technical-indicator-signals.v1".into(),
         candle_count: candles.len(),
         metrics: serde_json::json!({
             "close": close, "smaFast": sma_fast, "smaSlow": sma_slow, "ema20": ema20,
             "rsi14": rsi14, "atr14": atr14,
-            "atrPct": atr14.zip(close.filter(|value| *value > 0.0)).map(|(atr, close)| atr / close * 100.0),
+            "atrPct": atr_pct,
             "macdLine": macd_value.map(|value| value.0), "macdSignal": macd_value.map(|value| value.1),
             "macdHistogram": macd_value.map(|value| value.2),
             "bollingerUpper": bands.map(|value| value.0), "bollingerMiddle": bands.map(|value| value.1),
