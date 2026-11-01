@@ -71,7 +71,8 @@
     "test:mt5-account-risk-control-plane": "node --test scripts/test-mt5-account-risk-control-plane.test.mjs",
     "test:openbb-market-data": "node --test scripts/test-openbb-native-market-data-contract.test.mjs",
     "test:meme-coin-hunter-contract": "node --test scripts/test-meme-coin-hunter-contract.test.mjs",
-    "test:rust-technical-indicators": "node --test scripts/test-rust-technical-indicators-contract.test.mjs"
+    "test:rust-technical-indicators": "node --test scripts/test-rust-technical-indicators-contract.test.mjs",
+    "architecture:rust-ratio": "node scripts/report-rust-first-ratio.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
