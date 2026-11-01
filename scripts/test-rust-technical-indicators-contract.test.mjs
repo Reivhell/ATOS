@@ -55,6 +55,10 @@ test('strict evidence references are snapshot-bound, bounded, and fail closed in
   assert.match(strictGate, /refs\.length <= 32/);
   assert.match(strictGate, /ref\.length <= 256/);
   assert.match(strictRust, /fn canonical_evidence_ref_matches_snapshot/);
+  assert.ok(strictRust.includes('fn evidence_ref_resolves_to_market_snapshot'));
+  assert.ok(strictRust.includes('fn has_registered_evidence_refs'));
+  assert.ok(strictRust.includes('evidence_refs_must_resolve_to_the_exact_market_scope_and_candle'));
+  assert.ok(strictRust.includes('source != "binance"'));
   assert.match(strictRust, /MAX_EVIDENCE_REFS_PER_ASSESSMENT: usize = 32/);
   assert.match(strictRust, /MAX_EVIDENCE_REF_LENGTH: usize = 256/);
   assert.match(strictRust, /evidence_refs_enforce_count_and_length_limits/);
