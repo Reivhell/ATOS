@@ -1,164 +1,171 @@
-# Agentic Trading OS
+# Agentic Trading OS (ATOS)
 
-**Local-first trading research desktop** — Rust-native market data, MT5 telemetry, paper trading, and fail-closed risk controls in a Svelte 5 / Tauri 2 shell.
+**A local-first trading research desktop built with Rust, Tauri 2, and Svelte 5.** ATOS brings market-data inspection, MT5 telemetry, strategy backtesting, paper-account controls, and AI-assisted research into one workspace.
 
-[![npm test](https://img.shields.io/badge/npm%20test-375%20passing-brightgreen)](https://github.com)
-[![cargo test](https://img.shields.io/badge/cargo%20test-239%20passing-brightgreen)](https://github.com)
-[![build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
-[![not certified](https://img.shields.io/badge/status-not%20production--certified-amber)](https://github.com)
+> **Safety status:** ATOS is research- and paper-trading-only. The MT5 bridge is read-only and does not submit, modify, close, or cancel broker orders. The project is not production-certified; passing source-level checks does not replace native builds, MetaEditor compilation, or real-terminal and broker acceptance tests.
 
----
+[![Node tests](https://img.shields.io/badge/Node%20tests-375%20passing-brightgreen)](https://github.com/Reivhell/ATOS)
+[![Rust tests](https://img.shields.io/badge/Rust%20tests-239%20passing-brightgreen)](https://github.com/Reivhell/ATOS)
+[![Release status](https://img.shields.io/badge/release-not%20production--certified-orange)](https://github.com/Reivhell/ATOS)
 
-## What it is
+## Contents
 
-Agentic Trading OS is a desktop application for **trading research and paper execution**. It runs entirely on your machine — no cloud account, no remote execution, no live order submission. Market data comes from authenticated MT5 and public Binance caches; every price, candle, and order snapshot is validated before it reaches your screen.
+- [What ATOS does](#what-atos-does)
+- [Core capabilities](#core-capabilities)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Getting started](#getting-started)
+- [Verification status](#verification-status)
+- [Safety and current limitations](#safety-and-current-limitations)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License and security](#license-and-security)
 
-**The app is research/paper-only.** It has no live execution authority and will never submit or mutate broker orders.
+## What ATOS does
 
----
+ATOS is a local desktop workspace for researching markets, testing strategies, inspecting account telemetry, and supervising AI-assisted analysis. It is designed around explicit boundaries: Rust owns authoritative state and risk decisions; the UI presents those decisions; AI output is advisory rather than execution authority.
 
-## Why it's different
+The current application combines MT5 telemetry with public market-data sources and local research workflows. It is not a cloud trading service, and it does not provide live broker order execution.
 
-| Most trading tools | Agentic Trading OS |
-|---|---|
-| Cloud-first, remote execution | Local-first, nothing leaves your machine |
-| Live order execution by default | Read-only; paper trading only, no order submission |
-| Synthetic demo data | Real MT5 + Binance data, validated freshness |
-| Fail-open on bad data | Fail-closed: stale, NaN, or inconsistent data is rejected |
-| No audit trail | SHA-256 hash-chained SQLite state commits |
+## Core capabilities
 
----
+- **Market data:** Rust-native provider integration, canonical data models, freshness checks, and inspectable market-data provenance.
+- **MT5 bridge:** Authenticated, read-only terminal telemetry with durable tick/candle ingestion, per-series cursors, and historical data inspection.
+- **Account-wide risk controls:** Aggregated stop-risk across open positions and active pending orders, protection-state checks, risk-budget headroom, and broker-native candidate margin preflight.
+- **Backtesting:** Deterministic research workflows, out-of-sample windows, next-bar-open execution, and dataset fingerprints.
+- **AI-assisted research:** Allowlisted providers, OS credential-store integration, bounded commentary, and no execution authority.
+- **State integrity:** Local SQLite persistence with SHA-256 hash-chained commits and a tamper-evident audit trail.
+- **Desktop interface:** Svelte 5 panels hosted by Tauri 2 for the dashboard, market data, MT5 bridge, and agent runtime.
 
 ## Architecture
 
+ATOS is a local modular monolith. The frontend communicates with the Rust backend through typed Tauri commands. Domain and application logic remain separate from transport and infrastructure adapters.
+
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                    Svelte 5 / Tauri 2 UI                    │
-│  Dashboard • Market Data • MT5 Bridge • Agent Runtime       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Tauri IPC commands (typed, read-only)          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   domain/    │    │ application/ │    │ runtime/     │
-│  models,     │    │ backtest,    │    │ trading_core │
-│  market data │    │ risk sizing, │    │ state engine │
-│  state       │    │ strict gate  │    │ SQLite       │
-└──────────────┘    └──────────────┘    └──────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ infrastructure/   adapters/tauri/ │
-│ providers, MT5   commands, bootstrap│
-│ bridge, keyring  │                    │
-└──────────────┘    └──────────────┘    └──────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────────────┐
-│  MT5 (read-only telemetry)  •  Binance (public cache)      │
-│  keyring (OS credential store)  •  SQLite (audit chain)   │
-└─────────────────────────────────────────────────────────────┘
+Svelte 5 presentation
+        |
+        v
+Tauri 2 typed IPC
+        |
+        v
+Rust application and domain layers
+        |
+        +----------------+----------------+
+        |                |                |
+        v                v                v
+ Trading runtime   Research/backtest   AI research runtime
+        |                |                |
+        +----------------+----------------+
+                         |
+                         v
+           SQLite / MT5 telemetry / public data
 ```
 
----
+Key source areas:
 
-## How to use
+| Path | Responsibility |
+|---|---|
+| `src-tauri/src/domain/` | Domain models, invariants, and state-transition policy |
+| `src-tauri/src/application/` | Backtesting, market-data queries, research workflows, and strict-analysis use cases |
+| `src-tauri/src/runtime/trading_core.rs` | Paper-account state, risk enforcement, and persistence lifecycle |
+| `src-tauri/src/infrastructure/mt5/` | MT5 telemetry transport and durable market-data ingestion |
+| `src-tauri/src/infrastructure/ai/` | AI provider orchestration, credential handling, and agent runtime |
+| `src-tauri/src/adapters/tauri/` | Tauri bootstrap and typed command adapters |
+| `src/lib/` | Frontend domain, engines, application services, adapters, and presentation |
+| `MQL5/Experts/ATOS_Bridge.mq5` | Read-only MetaTrader 5 terminal bridge |
 
-### Prerequisites
+See the [system architecture](docs/03_SYSTEM_ARCHITECTURE.md) for dependency rules, runtime ownership, failure behavior, and known architectural debt.
 
-- Node.js ≥ 20
-- Bun (for the Hono research API)
-- Rust 1.99.1 (for the native backend)
+## Requirements
 
-### Install & build
+- Node.js 20 or newer
+- Bun for the Hono research API
+- Rust toolchain for the native backend
+- MetaTrader 5 and MetaEditor only when validating the MT5 bridge on a real terminal
+
+Exact toolchain availability and platform requirements can vary. Release validation must use the repository lockfiles and supported native build environment.
+
+## Getting started
+
+Clone the repository and install dependencies from the repository root:
 
 ```bash
-# 1. Install all dependencies (frozen lockfiles)
+git clone https://github.com/Reivhell/ATOS.git
+cd ATOS
+
 npm ci --no-audit --fund=false
 bun install --frozen-lockfile
-
-# 2. Build the frontend (Svelte + Vite)
-npm run build
-
-# 3. Verify everything
-npm test              # 375 tests, 52 suites
-cargo test --all-targets   # 239 Rust tests
-npm run verify:repo   # repository guardrails
 ```
 
-### Run in development
+Build the frontend and run the repository checks:
 
 ```bash
-# Frontend dev server
-npm run dev
+npm run build
+npm test
+cargo test --all-targets
+npm run verify:repo
+```
 
-# Research API (Bun/Hono)
+Run the frontend development server:
+
+```bash
+npm run dev
+```
+
+Run the local research API separately when needed:
+
+```bash
 bun run api/src/server.ts
 ```
 
----
+The desktop app and its native backend require the appropriate Tauri and Rust toolchain. A successful frontend build or JavaScript test run alone does not establish that the complete desktop application or MQL5 bridge is ready for release.
 
-## Verification status (2026-11-01)
+## Verification status
 
-| Gate | Command | Result |
-|---|---|---|
-| Frontend build | `npm run build` | Passes (3434 modules) |
-| Typecheck layers | `npm run typecheck:layers` | Passes |
-| Rust format | `cargo fmt --check` | Clean |
-| Rust clippy | `cargo clippy --all-targets` | No errors |
-| Rust tests | `cargo test --all-targets` | 239 passed |
-| Node tests | `npm test` | 375 passed / 52 suites |
-| Repo guardrails | `npm run verify:repo` | Passes |
-| Release preflight | `npm run release:preflight` | Passes |
+The repository's recorded verification results dated 2026-11-01 are:
 
-**Lockfiles present:** `package-lock.json`, `bun.lock`, `src-tauri/Cargo.lock`
+| Check | Recorded result |
+|---|---|
+| Frontend build | Passed |
+| TypeScript layer checks | Passed |
+| Rust formatting | Passed |
+| Rust Clippy | No errors |
+| Rust tests | 239 passed |
+| Node tests | 375 passed across 52 suites |
+| Repository guardrails | Passed |
+| Release preflight | Passed |
 
-**External gates (not available in this workspace):** MetaEditor MQL5 compilation, real MT5 terminal, broker acceptance. The app cannot be production-certified until these pass on the appropriate platform.
+These are repository-reported results, not a claim that every platform and broker combination has been accepted. MetaEditor compilation, real MT5 terminal behavior, broker-specific margin behavior, and packaged cross-platform installation require their own acceptance checks.
 
----
+## Safety and current limitations
 
-## What's included
+- **No live order execution:** the current EA is read-only. There is no order submission, modification, close, cancellation, or order-reservation API.
+- **Risk checks fail closed:** stale or invalid data, incomplete account inventories, unresolved stop risk, and inconsistent snapshots must not be treated as approval to increase exposure.
+- **Account-wide risk is a model, not a guarantee:** calculated stop risk does not include all commissions, swaps, financing, spread widening, slippage, gaps, stop execution failure, or broker liquidation behavior.
+- **Margin preflight is indicative:** terminal-calculated candidate margin is a conservative projection and may differ from broker/server rules, aggregate margin tiers, or hedged-position treatment. It does not reserve margin or guarantee later order acceptance.
+- **Point-in-time data can change:** account and order snapshots may become stale immediately after a calculation.
+- **Local-only bridge:** do not expose the MT5 bridge on a network interface. Remote-terminal support requires a separately reviewed transport and security design.
+- **Not production-certified:** native build and test execution, MQL5 compilation, real-terminal and broker acceptance, persistence/crash testing, credential-store acceptance, and release packaging must be completed before production approval.
 
-- **Rust-native market data platform** — provider registry, canonical models, typed result provenance, freshness anchoring
-- **MT5 bridge (read-only)** — authenticated telemetry, durable receipts, per-series cursors, historical-series inspector
-- **Account-wide risk control plane** — margin/stop-out policy, position and pending-order risk, 5% account-wide stop-risk ceiling, fail-closed sizing
-- **Backtesting engine** — next-bar-open execution, out-of-sample windows, Sharpe annualization, dataset SHA-256 fingerprints
-- **AI research runtime** — allowlisted providers (OpenAI, Anthropic, OpenRouter, Ollama), OS keyring storage, commentary-only output, no execution authority
-- **Durable state integrity** — SHA-256 hash-chained SQLite commits, tamper-evident audit log
-- **Svelte 5 / Tauri 2 desktop** — dashboard, market data panel, MT5 bridge panel, agent runtime panel
-
----
-
-## Limits & safety
-
-- **No live order execution.** The MT5 EA is read-only and does not submit or mutate orders.
-- **Not production-certified.** Do not use real trading account credentials or enable live execution until all gates pass on pinned CI.
-- **Local inference only.** GGUF/ONNX/SafeTensors imports are capped, hashed, and format-checked — never executed.
-- **API is loopback-only.** The Bun/Hono research API binds to `127.0.0.1` and rejects cross-site browser origins.
-
----
+Never use real trading credentials or rely on this software for live trading while production certification is outstanding.
 
 ## Documentation
 
-| Topic | Document |
+| Document | Purpose |
 |---|---|
-| Product requirements | `docs/01_PRD.md` |
-| System architecture | `docs/03_SYSTEM_ARCHITECTURE.md` |
-| Security & trading risk | `docs/08_SECURITY_AND_TRADING_RISK.md` |
-| Testing & acceptance | `docs/09_TESTING_AND_ACCEPTANCE.md` |
-| Roadmap | `docs/10_ROADMAP.md` |
-| Release attestation pipeline | `docs/RELEASE_ATTESTATION_PIPELINE_0.9.6.md` |
-| MT5 market data assurance | `docs/MT5_MARKET_DATA_ASSURANCE_AND_QUERY.md` |
-| Archive (v0.5–v0.11 reports) | `docs/archive/` |
+| [Product requirements](docs/01_PRD.md) | Product scope, goals, user journeys, and principles |
+| [System architecture](docs/03_SYSTEM_ARCHITECTURE.md) | Component boundaries, data ownership, invariants, and limitations |
+| [Security and trading risk](docs/08_SECURITY_AND_TRADING_RISK.md) | Security posture and risk controls |
+| [Testing and acceptance](docs/09_TESTING_AND_ACCEPTANCE.md) | Test strategy and acceptance criteria |
+| [Roadmap](docs/10_ROADMAP.md) | Planned work and product direction |
+| [Release attestation pipeline](docs/RELEASE_ATTESTATION_PIPELINE_0.9.6.md) | Release evidence and attestation process |
+| [MT5 market-data assurance](docs/MT5_MARKET_DATA_ASSURANCE_AND_QUERY.md) | MT5 data validation and query behavior |
+| [Archived reports](docs/archive/) | Historical engineering and validation reports |
 
----
+## Contributing
 
-## License
+Contributions should preserve the project's safety boundaries and architectural rules. Before proposing a change, review the relevant documentation, run the applicable checks, and describe any validation that could not be performed in your environment. Do not represent source-level checks as native or broker acceptance.
 
-See `SECURITY.md` for security policy and disclosure process.
+## License and security
+
+Review the repository's license files for reuse terms. For security concerns and disclosure guidance, see [SECURITY.md](SECURITY.md).
