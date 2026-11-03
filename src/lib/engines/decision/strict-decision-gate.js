@@ -76,7 +76,11 @@ function validSha256(value) {
   return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
 }
 
-/** Evidence references are scoped to one exact dataset; this JS gate remains non-authoritative. */
+/**
+ * Evidence references remain untrusted until their dataset binding is verified.
+ * @param {unknown} reference
+ * @param {unknown} snapshotSha256
+ */
 function canonicalEvidenceRefMatchesSnapshot(reference, snapshotSha256) {
   if (typeof reference !== 'string' || typeof snapshotSha256 !== 'string') return false;
   const match = /^snapshot:([a-fA-F0-9]{64}):(binance|mt5|rust-indicator|rust-structure|backtest):([A-Za-z0-9._~/-]+)$/.exec(reference);
@@ -86,6 +90,11 @@ function canonicalEvidenceRefMatchesSnapshot(reference, snapshotSha256) {
     && match[3].split('/').every((segment) => segment.length > 0 && !segment.startsWith('.'));
 }
 
+/**
+ * Keep the collection untrusted until every reference passes canonical validation.
+ * @param {unknown} refs
+ * @param {unknown} snapshotSha256
+ */
 function hasCanonicalEvidenceRefs(refs, snapshotSha256) {
   return Array.isArray(refs) && refs.length > 0 && refs.length <= 32
     && refs.every((ref) => typeof ref === 'string' && ref.length <= 256 && ref.trim() === ref
