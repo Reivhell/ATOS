@@ -34,6 +34,8 @@
   let riskSizingError = '';
   let riskSizingResult: Mt5RiskSizingResult | null = null;
   let riskSizingResultStale = false;
+  // Sequence freshness does not bind a cached result to the currently authenticated account or symbol.
+  // Keep identity validation in this presentation guard before exposing an active volume.
   $: riskSizingResultStale = !!riskSizingResult && (
     !status?.connected || status.stale || status.quoteStale
     || status.lastSequence !== riskSizingResult.snapshotSequence
