@@ -131,6 +131,7 @@ test('valid distressed account telemetry retains negative free margin for displa
   assert.match(risk, /free_after < min_free_margin/);
 });
 
+// These checks cover stale-result presentation, not identity changes across reconnects.
 test('frontend exposes account-wide inventory, broker stop-out policy and pending-order risk detail', () => {
   for (const field of ['marginInitial', 'marginMaintenance', 'marginCallLevel', 'stopOutLevel', 'marginStopoutMode', 'accountHedgeAllowed', 'accountLimitOrders']) {
     assert.match(types, new RegExp(`${field}:`));
