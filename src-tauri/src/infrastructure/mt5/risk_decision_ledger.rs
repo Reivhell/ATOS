@@ -40,7 +40,7 @@ trait CheckpointStore: Send + Sync {
 }
 
 #[cfg(not(test))]
-struct KeyringCheckpointStore;
+pub(super) struct KeyringCheckpointStore;
 
 #[cfg(not(test))]
 impl CheckpointStore for KeyringCheckpointStore {
@@ -76,7 +76,7 @@ impl CheckpointStore for KeyringCheckpointStore {
 }
 
 #[cfg(test)]
-struct KeyringCheckpointStore;
+pub(super) struct KeyringCheckpointStore;
 
 #[cfg(test)]
 impl CheckpointStore for KeyringCheckpointStore {
