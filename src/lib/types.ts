@@ -1,3 +1,54 @@
+export interface TechnicalIndicatorReading {
+  key: string;
+  title: string;
+  value: string;
+  detail: string;
+  available: boolean;
+}
+
+export interface NativeIndicatorSignal {
+  domain: 'trend' | 'momentum' | 'location' | 'structure';
+  direction: 'bullish' | 'bearish' | 'neutral';
+  signalStrength: number;
+  evidenceRefs: string[];
+}
+
+export interface NativeIndicatorSignalSnapshot {
+  contractVersion: string;
+  candleCount: number;
+  metrics: Record<string, number | null>;
+  signals: NativeIndicatorSignal[];
+}
+
+export interface NativeStructurePivot {
+  kind: string;
+  classification: string;
+  pivotIndex: number;
+  confirmedAtIndex: number;
+  pivotAtMs: number;
+  confirmedAtMs: number;
+  price: number;
+}
+
+export interface NativeStructureBreak {
+  direction: string;
+  classification: string;
+  levelKind: string;
+  level: number;
+  pivotIndex: number;
+  levelConfirmedAtIndex: number;
+  brokenAtIndex: number;
+  brokenAtMs: number;
+  close: number;
+  priorBias: string;
+}
+
+export interface NativeStructureSnapshot {
+  pivots: NativeStructurePivot[];
+  breaks: NativeStructureBreak[];
+  bias: string;
+}
+
 export interface Candle {
   time: number;
   open: number;

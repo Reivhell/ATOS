@@ -1,12 +1,27 @@
 import { invoke } from '@tauri-apps/api/core';
 import { assertNativeRuntime } from './native-runtime-guard.js';
-import type { AuditEvent, BacktestRequest, BacktestResult, CandleSeriesRequest, CandleSeriesResponse, CreateStrictWorkPlanRequest, CreateResearchHypothesisRequest, DashboardSnapshot, MarketDataProviderCatalogEntry, UnifiedMarketDataQuery, UnifiedMarketDataResult, Mt5BridgeStatus, Mt5BridgeSetup, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5SeriesQuery, Mt5SeriesQueryResponse, PlaceOrderRequest, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, ResearchWorkflowRequest, RiskLimits, StrictAnalysisWorkPlan, MemeCoinHunterReport, MemeCoinHunterSecurityStatus, StrictAuditChainStatus, StrictCompletionRequest, StrictCompletionResult } from '../../types';
+import type { TechnicalIndicatorReading, NativeIndicatorSignalSnapshot, NativeStructureSnapshot, Candle, AuditEvent, BacktestRequest, BacktestResult, CandleSeriesRequest, CandleSeriesResponse, CreateStrictWorkPlanRequest, CreateResearchHypothesisRequest, DashboardSnapshot, MarketDataProviderCatalogEntry, UnifiedMarketDataQuery, UnifiedMarketDataResult, Mt5BridgeStatus, Mt5BridgeSetup, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5SeriesQuery, Mt5SeriesQueryResponse, PlaceOrderRequest, ResearchHypothesis, ResearchIntegrityStatus, ResearchRunCardRecord, ResearchWorkflowRequest, RiskLimits, StrictAnalysisWorkPlan, MemeCoinHunterReport, MemeCoinHunterSecurityStatus, StrictAuditChainStatus, StrictCompletionRequest, StrictCompletionResult } from '../../types';
 
 export const isDesktopRuntime = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 function requireDesktopRuntime(capability: Parameters<typeof assertNativeRuntime>[1]): void {
   assertNativeRuntime(isDesktopRuntime(), capability);
+}
+
+export async function calculateTechnicalIndicatorReadings(candles: readonly Candle[]): Promise<TechnicalIndicatorReading[]> {
+  requireDesktopRuntime('technical indicators');
+  return invoke<TechnicalIndicatorReading[]>('calculate_technical_indicator_readings', { candles });
+}
+
+export async function calculateNativeIndicatorSignals(candles: readonly Candle[]): Promise<NativeIndicatorSignalSnapshot> {
+  requireDesktopRuntime('native indicator signals');
+  return invoke<NativeIndicatorSignalSnapshot>('calculate_native_indicator_signals', { candles });
+}
+
+export async function calculateNativeMarketStructure(candles: readonly Candle[]): Promise<NativeStructureSnapshot> {
+  requireDesktopRuntime('market structure analysis');
+  return invoke<NativeStructureSnapshot>('calculate_native_market_structure', { candles });
 }
 
 export async function getDashboardState(): Promise<DashboardSnapshot> {

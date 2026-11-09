@@ -9,8 +9,11 @@ use crate::{
             MarketDataProviderCatalogEntry, MarketDataQuery, UnifiedMarketDataResult,
         },
         models::{
-            Agent, AuditEvent, BacktestRequest, BacktestResult, CandleSeriesRequest,
+            Agent, AuditEvent, BacktestRequest, BacktestResult, Candle, CandleSeriesRequest,
             CandleSeriesResponse, DashboardSnapshot, PaperOrder, PlaceOrderRequest, RiskLimits,
+        },
+        technical_analysis::{
+            self, IndicatorReading, NativeIndicatorSignalSnapshot, NativeStructureSnapshot,
         },
     },
     infrastructure::{
@@ -22,6 +25,27 @@ use crate::{
 };
 use chrono::{SecondsFormat, Utc};
 use tauri::{Manager, State};
+
+#[tauri::command]
+pub fn calculate_technical_indicator_readings(
+    candles: Vec<Candle>,
+) -> Result<Vec<IndicatorReading>, String> {
+    technical_analysis::calculate_readings(&candles)
+}
+
+#[tauri::command]
+pub fn calculate_native_indicator_signals(
+    candles: Vec<Candle>,
+) -> Result<NativeIndicatorSignalSnapshot, String> {
+    technical_analysis::calculate_signal_snapshot(&candles)
+}
+
+#[tauri::command]
+pub fn calculate_native_market_structure(
+    candles: Vec<Candle>,
+) -> Result<NativeStructureSnapshot, String> {
+    technical_analysis::calculate_structure(&candles)
+}
 
 #[tauri::command]
 pub fn get_dashboard_state(core: State<'_, TradingCore>) -> Result<DashboardSnapshot, String> {
