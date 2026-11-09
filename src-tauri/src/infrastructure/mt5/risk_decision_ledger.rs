@@ -1255,8 +1255,11 @@ mod tests {
         let path = initialized_path();
         let store = provisioned_store(&path);
         store.fail_on_write(1);
-        assert!(append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err());
-        let status = verify_chain(&open_connection(&path).unwrap(), "Broker-Live", "12345").unwrap();
+        assert!(
+            append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err()
+        );
+        let status =
+            verify_chain(&open_connection(&path).unwrap(), "Broker-Live", "12345").unwrap();
         assert!(status.valid);
         assert_eq!(status.event_count, 0);
         let checkpoint = store.read("Broker-Live", "12345").unwrap().unwrap();
@@ -1270,13 +1273,20 @@ mod tests {
         let path = initialized_path();
         let store = provisioned_store(&path);
         store.fail_on_write(2);
-        assert!(append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err());
+        assert!(
+            append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err()
+        );
         let pending = store.read("Broker-Live", "12345").unwrap().unwrap();
         assert!(pending.pending.is_some());
         let recovered = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
         assert!(recovered.valid);
         assert_eq!(recovered.event_count, 1);
-        assert!(store.read("Broker-Live", "12345").unwrap().unwrap().pending.is_none());
+        assert!(store
+            .read("Broker-Live", "12345")
+            .unwrap()
+            .unwrap()
+            .pending
+            .is_none());
         let _ = std::fs::remove_file(path);
     }
 
