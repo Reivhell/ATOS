@@ -75,6 +75,20 @@ impl CheckpointStore for KeyringCheckpointStore {
     }
 }
 
+#[cfg(test)]
+struct KeyringCheckpointStore;
+
+#[cfg(test)]
+impl CheckpointStore for KeyringCheckpointStore {
+    fn read(&self, _broker_server: &str, _account_login: &str) -> Result<Option<LedgerCheckpoint>, String> {
+        Err("The operating-system credential store is not used by deterministic ledger tests.".into())
+    }
+
+    fn write(&self, _broker_server: &str, _account_login: &str, _checkpoint: &LedgerCheckpoint) -> Result<(), String> {
+        Err("The operating-system credential store is not used by deterministic ledger tests.".into())
+    }
+}
+
 #[cfg(not(test))]
 fn checkpoint_credential_name(broker_server: &str, account_login: &str) -> String {
     sha256_hex(format!("{broker_server}\\n{account_login}").as_bytes())
