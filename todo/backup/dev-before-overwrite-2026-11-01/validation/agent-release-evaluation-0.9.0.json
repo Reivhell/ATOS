@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "agent-reliability-evaluation.v2",
+  "createdAt": "2026-10-29T05:39:26.458Z",
+  "policy": {
+    "timeoutMs": 3000,
+    "minPassRate": 1,
+    "requiredCategories": [
+      "contract",
+      "determinism",
+      "evidence_integrity",
+      "prompt_injection",
+      "provider_failure",
+      "resource_limit"
+    ]
+  },
+  "summary": {
+    "scenarioCount": 9,
+    "passedCount": 9,
+    "failedCount": 0,
+    "passRate": 1,
+    "haltedAfterTimeout": false,
+    "categoriesCovered": [
+      "contract",
+      "determinism",
+      "evidence_integrity",
+      "prompt_injection",
+      "provider_failure",
+      "resource_limit"
+    ],
+    "categoryGaps": [],
+    "equivalenceFailures": [],
+    "policyPassed": true,
+    "executionAuthority": "none",
+    "liveExecutionAuthorized": false,
+    "orderIntent": null
+  },
+  "results": [
+    {
+      "scenarioId": "case-contract-invalid-provider",
+      "category": "contract",
+      "status": "pass",
+      "expectedOutcome": "rejected",
+      "observedOutcome": null,
+      "inputSha256": "21115c4de22b1e0be580fe5706198d3fdc2b78cd76abbe9170329bf05d90eebd",
+      "outputSha256": null,
+      "decisionFingerprint": null,
+      "errorCode": "AGENT_PROVIDER_CONTRACT_REJECTED",
+      "attempts": 1,
+      "durationMs": 0.94
+    },
+    {
+      "scenarioId": "case-provider-failure-timeout",
+      "category": "provider_failure",
+      "status": "pass",
+      "expectedOutcome": "rejected",
+      "observedOutcome": null,
+      "inputSha256": "e5599889236dd15d7e6a3d5c5f8f3f3f6c9b9a4b703296e026ac5a1c2c6ae730",
+      "outputSha256": null,
+      "decisionFingerprint": null,
+      "errorCode": "PROVIDER_TIMEOUT",
+      "attempts": 1,
+      "durationMs": 0.05
+    },
+    {
+      "scenarioId": "case-prompt-injection-authority",
+      "category": "prompt_injection",
+      "status": "pass",
+      "expectedOutcome": "rejected",
+      "observedOutcome": null,
+      "inputSha256": "ebecbbd20c6aae42921a6a3d768537c00d7dccf72d3bf64cf1bb8a1d3f93b810",
+      "outputSha256": null,
+      "decisionFingerprint": null,
+      "errorCode": "AGENT_AUTHORITY_INVARIANT_REJECTED",
+      "attempts": 1,
+      "durationMs": 0.15
+    },
+    {
+      "scenarioId": "case-prompt-injection-order-intent",
+      "category": "prompt_injection",
+      "status": "pass",
+      "expectedOutcome": "rejected",
+      "observedOutcome": null,
+      "inputSha256": "f0f14373aba25c45c3118dafa82608ad2923905da4f35500609404c0c208c460",
+      "outputSha256": null,
+      "decisionFingerprint": null,
+      "errorCode": "AGENT_ORDER_INTENT_REJECTED",
+      "attempts": 1,
+      "durationMs": 0.18
+    },
+    {
+      "scenarioId": "case-evidence-integrity-tamper",
+      "category": "evidence_integrity",
+      "status": "pass",
+      "expectedOutcome": "rejected",
+      "observedOutcome": null,
+      "inputSha256": "35f0ae662980019da3ae8b49808096b8522f0b9f012d046a5470756bce529188",
+      "outputSha256": null,
+      "decisionFingerprint": null,
+      "errorCode": "AGENT_EVIDENCE_INTEGRITY_REJECTED",
+      "attempts": 1,
+      "durationMs": 0.85
+    },
+    {
+      "scenarioId": "case-determinism-baseline",
+      "category": "determinism",
+      "status": "pass",
+      "expectedOutcome": "accepted",
+      "observedOutcome": "accepted",
+      "inputSha256": "cfaa72d87d97f148709f1f47ec77e672fb82dbac648b467a24c827f80db293b5",
+      "outputSha256": "d648c64905b2ab309071f6dd6e71b45da7bd4aa9dda4e52e5ecd4549308d420c",
+      "decisionFingerprint": "c66b47dd6ccc2af21173bde728c1864f0e487a0cd483c2b0795ba6b1f1c1a78f",
+      "errorCode": null,
+      "attempts": 3,
+      "durationMs": 14.31
+    },
+    {
+      "scenarioId": "case-determinism-narrative-metamorphism",
+      "category": "determinism",
+      "status": "pass",
+      "expectedOutcome": "accepted",
+      "observedOutcome": "accepted",
+      "inputSha256": "07c397f62e7b886d19e88fb1ba36457f544d984d4718e9612cb0d24520ad20ae",
+      "outputSha256": "d648c64905b2ab309071f6dd6e71b45da7bd4aa9dda4e52e5ecd4549308d420c",
+      "decisionFingerprint": "c66b47dd6ccc2af21173bde728c1864f0e487a0cd483c2b0795ba6b1f1c1a78f",
+      "errorCode": null,
+      "attempts": 2,
+      "durationMs": 2.7
+    },
+    {
+      "scenarioId": "case-determinism-evidence-order",
+      "category": "determinism",
+      "status": "pass",
+      "expectedOutcome": "accepted",
+      "observedOutcome": "accepted",
+      "inputSha256": "1e88eeb8d9fa098378fea16cc7c6895b02c94aa12e7b62851e8268055a92fa03",
+      "outputSha256": "d648c64905b2ab309071f6dd6e71b45da7bd4aa9dda4e52e5ecd4549308d420c",
+      "decisionFingerprint": "c66b47dd6ccc2af21173bde728c1864f0e487a0cd483c2b0795ba6b1f1c1a78f",
+      "errorCode": null,
+      "attempts": 2,
+      "durationMs": 2.11
+    },
+    {
+      "scenarioId": "case-resource-limit-summary",
+      "category": "resource_limit",
+      "status": "pass",
+      "expectedOutcome": "rejected",
+      "observedOutcome": null,
+      "inputSha256": "42b535f64187dfc8a6a0c6fbcae45d7d914573b1283cc9df23b453f3c310f477",
+      "outputSha256": null,
+      "decisionFingerprint": null,
+      "errorCode": "AGENT_RESOURCE_BOUND_REJECTED",
+      "attempts": 1,
+      "durationMs": 0.33
+    }
+  ],
+  "reportSha256": "e8cf0f138ade6351c05fcd332ae7880feeb99f7ade857f506780b7aba06fa9c4",
+  "evaluationMode": "DETERMINISTIC_APPLICATION_BOUNDARY_WITH_SIMULATED_PROVIDER_FAILURE",
+  "providerLiveIntegrationTested": false,
+  "executionAuthority": "none",
+  "liveExecutionAuthorized": false,
+  "orderIntent": null,
+  "releaseEnvelopeSha256": "5ac466617d9576870e7a3e35d31dd82356d21aea64d80408625930a1d8a2cc63"
+}

@@ -1,0 +1,1560 @@
+//! Append-only, account-scoped audit receipts for MT5 risk-sizing decisions.
+#[cfg(not(test))]
+use keyring::Entry;
+use rusqlite::{params, Connection, TransactionBehavior};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::{path::Path, time::Duration};
+use uuid::Uuid;
+
+const LEDGER_SCHEMA_VERSION: i64 = 1;
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+const GENESIS_SHA256: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+const MAX_LEDGER_EVENTS_PER_ACCOUNT: u64 = 1_000_000;
+const MAX_AUDIT_PAYLOAD_BYTES: usize = 256 * 1024;
+#[cfg(not(test))]
+const CHECKPOINT_SERVICE: &str = "dev.agentictrading.os.mt5-risk-ledger";
+const CHECKPOINT_VERSION: u8 = 1;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct LedgerCheckpoint {
+    version: u8,
+    event_count: u64,
+    head_sha256: String,
+    #[serde(default)]
+    pending: Option<PendingCheckpoint>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PendingCheckpoint {
+    event_count: u64,
+    head_sha256: String,
+}
+
+pub(super) trait CheckpointStore: Send + Sync {
+    fn read(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Option<LedgerCheckpoint>, String>;
+    fn write(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+        checkpoint: &LedgerCheckpoint,
+    ) -> Result<(), String>;
+}
+
+#[cfg(not(test))]
+pub(super) struct KeyringCheckpointStore;
+
+#[cfg(not(test))]
+impl CheckpointStore for KeyringCheckpointStore {
+    fn read(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Option<LedgerCheckpoint>, String> {
+        let entry = Entry::new(
+            CHECKPOINT_SERVICE,
+            &checkpoint_credential_name(broker_server, account_login),
+        ).map_err(|_| "MT5 risk-decision checkpoint could not access the operating-system credential store; ledger operations are blocked.".to_string())?;
+        match entry.get_password() {
+            Ok(value) => {
+                let checkpoint: LedgerCheckpoint = serde_json::from_str(&value)
+                    .map_err(|_| "MT5 risk-decision checkpoint is malformed; ledger operations are blocked.".to_string())?;
+                if checkpoint.version != CHECKPOINT_VERSION || !is_sha256(&checkpoint.head_sha256) {
+                    return Err("MT5 risk-decision checkpoint version or head is invalid; ledger operations are blocked.".into());
+                }
+                Ok(Some(checkpoint))
+            }
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Err("MT5 risk-decision checkpoint could not be read from the operating-system credential store; ledger operations are blocked.".into()),
+        }
+    }
+
+    fn write(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+        checkpoint: &LedgerCheckpoint,
+    ) -> Result<(), String> {
+        let entry = Entry::new(
+            CHECKPOINT_SERVICE,
+            &checkpoint_credential_name(broker_server, account_login),
+        )
+        .map_err(|_| {
+            "MT5 risk-decision checkpoint could not access the operating-system credential store."
+                .to_string()
+        })?;
+        let value = serde_json::to_string(checkpoint)
+            .map_err(|_| "MT5 risk-decision checkpoint could not be serialized.".to_string())?;
+        entry.set_password(&value)
+            .map_err(|_| "MT5 risk-decision checkpoint could not be durably stored in the operating-system credential store.".to_string())
+    }
+}
+
+#[cfg(test)]
+pub(super) struct KeyringCheckpointStore;
+
+#[cfg(test)]
+impl CheckpointStore for KeyringCheckpointStore {
+    fn read(
+        &self,
+        _broker_server: &str,
+        _account_login: &str,
+    ) -> Result<Option<LedgerCheckpoint>, String> {
+        Err(
+            "The operating-system credential store is not used by deterministic ledger tests."
+                .into(),
+        )
+    }
+
+    fn write(
+        &self,
+        _broker_server: &str,
+        _account_login: &str,
+        _checkpoint: &LedgerCheckpoint,
+    ) -> Result<(), String> {
+        Err(
+            "The operating-system credential store is not used by deterministic ledger tests."
+                .into(),
+        )
+    }
+}
+
+#[cfg(not(test))]
+fn checkpoint_credential_name(broker_server: &str, account_login: &str) -> String {
+    sha256_hex(format!("{broker_server}\\n{account_login}").as_bytes())
+}
+
+fn checkpoint_matches(status: &Mt5RiskDecisionLedgerStatus, checkpoint: &LedgerCheckpoint) -> bool {
+    checkpoint.version == CHECKPOINT_VERSION
+        && checkpoint.event_count == status.event_count
+        && is_sha256(&checkpoint.head_sha256)
+        && checkpoint.head_sha256 == status.head_sha256
+        && checkpoint.pending.is_none()
+}
+
+fn missing_checkpoint_status(status: &Mt5RiskDecisionLedgerStatus) -> Mt5RiskDecisionLedgerStatus {
+    invalid_status(
+        &status.broker_server,
+        &status.account_login,
+        status.event_count,
+        status.head_sha256.clone(),
+        if status.event_count == 0 { 0 } else { 1 },
+        "Risk-decision ledger checkpoint is missing; refusing to reset the anchor or trust unanchored history.",
+    )
+}
+
+fn compare_checkpoint(
+    status: &Mt5RiskDecisionLedgerStatus,
+    checkpoint: &LedgerCheckpoint,
+) -> Mt5RiskDecisionLedgerStatus {
+    if checkpoint_matches(status, checkpoint) {
+        return status.clone();
+    }
+    invalid_status(
+        &status.broker_server,
+        &status.account_login,
+        status.event_count,
+        status.head_sha256.clone(),
+        checkpoint.event_count.min(status.event_count).saturating_add(1),
+        "Risk-decision ledger head does not match the operating-system checkpoint; refusing to trust or reset history.",
+    )
+}
+
+fn verify_external_checkpoint(
+    status: &Mt5RiskDecisionLedgerStatus,
+    store: &dyn CheckpointStore,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    let checkpoint = store.read(&status.broker_server, &status.account_login)?;
+    match checkpoint {
+        Some(mut checkpoint) if checkpoint.pending.is_some() => {
+            let pending = checkpoint
+                .pending
+                .as_ref()
+                .expect("pending checkpoint checked");
+            if pending.event_count != checkpoint.event_count.saturating_add(1)
+                || !is_sha256(&pending.head_sha256)
+            {
+                return Ok(invalid_status(
+                    &status.broker_server,
+                    &status.account_login,
+                    status.event_count,
+                    status.head_sha256.clone(),
+                    checkpoint.event_count.saturating_add(1),
+                    "Risk-decision checkpoint has an invalid interrupted-append intent; manual recovery is required.",
+                ));
+            }
+            if status.event_count == checkpoint.event_count
+                && status.head_sha256 == checkpoint.head_sha256
+            {
+                return Ok(invalid_status(
+                    &status.broker_server,
+                    &status.account_login,
+                    status.event_count,
+                    status.head_sha256.clone(),
+                    pending.event_count,
+                    "Risk-decision append was interrupted before its outcome could be anchored; refusing automatic rollback or checkpoint reset. Manual recovery is required.",
+                ));
+            }
+            if status.event_count == pending.event_count
+                && status.head_sha256 == pending.head_sha256
+            {
+                checkpoint.event_count = pending.event_count;
+                checkpoint.head_sha256 = pending.head_sha256.clone();
+                checkpoint.pending = None;
+                store.write(&status.broker_server, &status.account_login, &checkpoint)?;
+                return Ok(status.clone());
+            }
+            Ok(invalid_status(
+                &status.broker_server,
+                &status.account_login,
+                status.event_count,
+                status.head_sha256.clone(),
+                checkpoint.event_count.min(status.event_count).saturating_add(1),
+                "Risk-decision ledger does not match either side of its interrupted append; manual recovery is required.",
+            ))
+        }
+        Some(checkpoint) => Ok(compare_checkpoint(status, &checkpoint)),
+        None => Ok(missing_checkpoint_status(status)),
+    }
+}
+
+pub(super) fn initialize_genesis_checkpoint(
+    path: &Path,
+    broker_server: &str,
+    account_login: &str,
+    store: &dyn CheckpointStore,
+) -> Result<(), String> {
+    if !valid_identity(broker_server, 128) || !valid_identity(account_login, 32) {
+        return Err("Risk-decision checkpoint initialization requires a valid authenticated account identity.".into());
+    }
+    let connection = open_connection(path)?;
+    let status = verify_chain(&connection, broker_server, account_login)?;
+    if !status.valid || status.event_count != 0 || status.head_sha256 != GENESIS_SHA256 {
+        return Err(
+            "Risk-decision checkpoint can only be provisioned for a verified empty account ledger."
+                .into(),
+        );
+    }
+    if store.read(broker_server, account_login)?.is_some() {
+        return Err(
+            "Risk-decision checkpoint already exists; refusing to replace its trust root.".into(),
+        );
+    }
+    store.write(
+        broker_server,
+        account_login,
+        &LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 0,
+            head_sha256: GENESIS_SHA256.into(),
+            pending: None,
+        },
+    )
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Mt5RiskDecisionRecord {
+    pub broker_server: String,
+    pub account_login: String,
+    pub symbol: String,
+    pub decision: String,
+    pub decided_at_ms: i64,
+    pub request: Value,
+    pub result: Value,
+    pub snapshot_sequence: u64,
+    pub specification_revision: u64,
+    pub specification_fingerprint_sha256: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Mt5RiskDecisionReceipt {
+    pub decision_id: String,
+    pub broker_server: String,
+    pub account_login: String,
+    pub symbol: String,
+    pub decision: String,
+    pub sequence: u64,
+    pub decided_at_ms: i64,
+    pub request_sha256: String,
+    pub result_sha256: String,
+    pub snapshot_sequence: u64,
+    pub specification_revision: u64,
+    pub specification_fingerprint_sha256: String,
+    pub previous_sha256: String,
+    pub event_sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Mt5RiskDecisionLedgerStatus {
+    pub valid: bool,
+    pub broker_server: String,
+    pub account_login: String,
+    pub event_count: u64,
+    pub head_sha256: String,
+    pub first_invalid_sequence: Option<u64>,
+    pub integrity_error: Option<String>,
+}
+
+fn open_connection(path: &Path) -> Result<Connection, String> {
+    let connection = Connection::open(path)
+        .map_err(|error| format!("MT5 risk-decision database could not be opened: {error}"))?;
+    connection
+        .busy_timeout(BUSY_TIMEOUT)
+        .map_err(|error| format!("MT5 risk-decision database busy timeout failed: {error}"))?;
+    connection
+        .execute_batch("PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")
+        .map_err(|error| format!("MT5 risk-decision durability settings failed: {error}"))?;
+    Ok(connection)
+}
+
+pub(crate) fn initialize(connection: &Connection) -> Result<(), String> {
+    connection
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS mt5_risk_decision_ledger_meta (
+                singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+                schema_version INTEGER NOT NULL CHECK(schema_version >= 1)
+            );
+            INSERT OR IGNORE INTO mt5_risk_decision_ledger_meta(singleton_id, schema_version)
+                VALUES (1, 1);
+            CREATE TABLE IF NOT EXISTS mt5_risk_decision_events (
+                broker_server TEXT NOT NULL,
+                account_login TEXT NOT NULL,
+                sequence INTEGER NOT NULL CHECK(sequence > 0),
+                decision_id TEXT NOT NULL UNIQUE,
+                symbol TEXT NOT NULL,
+                decision TEXT NOT NULL CHECK(decision IN ('SIZED_WITH_LIMITATIONS', 'BLOCKED')),
+                decided_at_ms INTEGER NOT NULL CHECK(decided_at_ms > 0),
+                request_json TEXT NOT NULL,
+                request_sha256 TEXT NOT NULL CHECK(length(request_sha256) = 64),
+                result_json TEXT NOT NULL,
+                result_sha256 TEXT NOT NULL CHECK(length(result_sha256) = 64),
+                snapshot_sequence INTEGER NOT NULL CHECK(snapshot_sequence > 0),
+                specification_revision INTEGER NOT NULL CHECK(specification_revision > 0),
+                specification_fingerprint_sha256 TEXT NOT NULL CHECK(length(specification_fingerprint_sha256) = 64),
+                previous_sha256 TEXT NOT NULL CHECK(length(previous_sha256) = 64),
+                event_sha256 TEXT NOT NULL CHECK(length(event_sha256) = 64),
+                PRIMARY KEY(broker_server, account_login, sequence)
+            ) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS idx_mt5_risk_decisions_by_symbol
+                ON mt5_risk_decision_events(broker_server, account_login, symbol, sequence DESC);
+            CREATE TRIGGER IF NOT EXISTS trg_mt5_risk_decision_events_no_update
+            BEFORE UPDATE ON mt5_risk_decision_events
+            BEGIN SELECT RAISE(ABORT, 'MT5 risk-decision ledger is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS trg_mt5_risk_decision_events_no_delete
+            BEFORE DELETE ON mt5_risk_decision_events
+            BEGIN SELECT RAISE(ABORT, 'MT5 risk-decision ledger is append-only'); END;",
+        )
+        .map_err(|error| format!("MT5 risk-decision ledger schema initialization failed: {error}"))?;
+
+    let version: i64 = connection
+        .query_row(
+            "SELECT schema_version FROM mt5_risk_decision_ledger_meta WHERE singleton_id=1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| {
+            format!("MT5 risk-decision ledger schema version could not be read: {error}")
+        })?;
+    if version > LEDGER_SCHEMA_VERSION {
+        return Err(format!(
+            "MT5 risk-decision ledger schema version {version} is newer than this application supports ({LEDGER_SCHEMA_VERSION}); refusing writes."
+        ));
+    }
+    if version != LEDGER_SCHEMA_VERSION {
+        return Err(format!(
+            "MT5 risk-decision ledger schema version {version} requires an explicit migration."
+        ));
+    }
+    verify_immutability_triggers(connection)?;
+    Ok(())
+}
+
+fn verify_immutability_triggers(connection: &Connection) -> Result<(), String> {
+    const REQUIRED_TRIGGERS: [(&str, &str); 2] = [
+        ("trg_mt5_risk_decision_events_no_update", "CREATE TRIGGER trg_mt5_risk_decision_events_no_update BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(ABORT, 'MT5 risk-decision ledger is append-only'); END"),
+        ("trg_mt5_risk_decision_events_no_delete", "CREATE TRIGGER trg_mt5_risk_decision_events_no_delete BEFORE DELETE ON mt5_risk_decision_events BEGIN SELECT RAISE(ABORT, 'MT5 risk-decision ledger is append-only'); END"),
+    ];
+    for (name, required_sql) in REQUIRED_TRIGGERS {
+        let sql: Option<String> = connection
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?1",
+                [name],
+                |row| row.get(0),
+            )
+            .map_err(|error| {
+                format!("Cannot inspect MT5 risk-decision ledger guard {name}: {error}")
+            })?;
+        let Some(sql) = sql else {
+            return Err(format!(
+                "MT5 risk-decision ledger guard {name} is missing; writes are disabled."
+            ));
+        };
+        let normalize_sql = |value: &str| {
+            value
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_ascii_uppercase()
+        };
+        if normalize_sql(&sql) != normalize_sql(required_sql) {
+            return Err(format!("MT5 risk-decision ledger guard {name} differs from the required append-only policy; writes are disabled."));
+        }
+    }
+    Ok(())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn valid_identity(value: &str, max_len: usize) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= max_len
+        && value.trim() == value
+        && !value.chars().any(char::is_control)
+}
+
+fn canonical_json(value: &Value) -> Result<String, String> {
+    if !value.is_object() {
+        return Err("Risk-decision audit payload must be a JSON object.".into());
+    }
+    let encoded = serde_json::to_string(value)
+        .map_err(|error| format!("Risk-decision audit payload could not be serialized: {error}"))?;
+    if encoded.len() > MAX_AUDIT_PAYLOAD_BYTES {
+        return Err("Risk-decision audit payload exceeds the 256 KiB storage limit.".into());
+    }
+    Ok(encoded)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+struct RiskDecisionEventMaterial<'a> {
+    broker_server: &'a str,
+    account_login: &'a str,
+    sequence: u64,
+    decision_id: &'a str,
+    symbol: &'a str,
+    decision: &'a str,
+    decided_at_ms: i64,
+    request_sha256: &'a str,
+    result_sha256: &'a str,
+    snapshot_sequence: u64,
+    specification_revision: u64,
+    specification_fingerprint_sha256: &'a str,
+    previous_sha256: &'a str,
+}
+
+fn event_sha256(material: RiskDecisionEventMaterial<'_>) -> String {
+    let RiskDecisionEventMaterial {
+        broker_server,
+        account_login,
+        sequence,
+        decision_id,
+        symbol,
+        decision,
+        decided_at_ms,
+        request_sha256,
+        result_sha256,
+        snapshot_sequence,
+        specification_revision,
+        specification_fingerprint_sha256,
+        previous_sha256,
+    } = material;
+    let canonical = format!(
+        "{LEDGER_SCHEMA_VERSION}\n{broker_server}\n{account_login}\n{sequence}\n{decision_id}\n{symbol}\n{decision}\n{decided_at_ms}\n{request_sha256}\n{result_sha256}\n{snapshot_sequence}\n{specification_revision}\n{specification_fingerprint_sha256}\n{previous_sha256}"
+    );
+    sha256_hex(canonical.as_bytes())
+}
+
+fn invalid_status(
+    broker_server: &str,
+    account_login: &str,
+    event_count: u64,
+    head_sha256: String,
+    sequence: u64,
+    reason: impl Into<String>,
+) -> Mt5RiskDecisionLedgerStatus {
+    Mt5RiskDecisionLedgerStatus {
+        valid: false,
+        broker_server: broker_server.into(),
+        account_login: account_login.into(),
+        event_count,
+        head_sha256,
+        first_invalid_sequence: Some(sequence),
+        integrity_error: Some(reason.into()),
+    }
+}
+
+fn verify_chain(
+    connection: &Connection,
+    broker_server: &str,
+    account_login: &str,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT sequence, decision_id, symbol, decision, decided_at_ms,
+                    request_json, request_sha256, result_json, result_sha256,
+                    snapshot_sequence, specification_revision, specification_fingerprint_sha256,
+                    previous_sha256, event_sha256
+             FROM mt5_risk_decision_events
+             WHERE broker_server=?1 AND account_login=?2
+             ORDER BY sequence ASC",
+        )
+        .map_err(|error| format!("MT5 risk-decision chain query could not be prepared: {error}"))?;
+    let mut rows = statement
+        .query(params![broker_server, account_login])
+        .map_err(|error| format!("MT5 risk-decision chain query failed: {error}"))?;
+    let mut expected_sequence = 1_u64;
+    let mut previous = GENESIS_SHA256.to_string();
+    let mut event_count = 0_u64;
+
+    while let Some(row) = rows
+        .next()
+        .map_err(|error| format!("MT5 risk-decision chain row could not be read: {error}"))?
+    {
+        let sequence: i64 = row
+            .get(0)
+            .map_err(|error| format!("Risk-decision sequence is unreadable: {error}"))?;
+        let decision_id: String = row
+            .get(1)
+            .map_err(|error| format!("Risk-decision ID is unreadable: {error}"))?;
+        let symbol: String = row
+            .get(2)
+            .map_err(|error| format!("Risk-decision symbol is unreadable: {error}"))?;
+        let decision: String = row
+            .get(3)
+            .map_err(|error| format!("Risk-decision state is unreadable: {error}"))?;
+        let decided_at_ms: i64 = row
+            .get(4)
+            .map_err(|error| format!("Risk-decision timestamp is unreadable: {error}"))?;
+        let request_json: String = row
+            .get(5)
+            .map_err(|error| format!("Risk-decision request is unreadable: {error}"))?;
+        let request_hash: String = row
+            .get(6)
+            .map_err(|error| format!("Risk-decision request hash is unreadable: {error}"))?;
+        let result_json: String = row
+            .get(7)
+            .map_err(|error| format!("Risk-decision result is unreadable: {error}"))?;
+        let result_hash: String = row
+            .get(8)
+            .map_err(|error| format!("Risk-decision result hash is unreadable: {error}"))?;
+        let snapshot_sequence: i64 = row
+            .get(9)
+            .map_err(|error| format!("Risk-decision snapshot sequence is unreadable: {error}"))?;
+        let specification_revision: i64 = row.get(10).map_err(|error| {
+            format!("Risk-decision specification revision is unreadable: {error}")
+        })?;
+        let specification_hash: String = row
+            .get(11)
+            .map_err(|error| format!("Risk-decision specification hash is unreadable: {error}"))?;
+        let previous_hash: String = row
+            .get(12)
+            .map_err(|error| format!("Risk-decision previous hash is unreadable: {error}"))?;
+        let stored_event_hash: String = row
+            .get(13)
+            .map_err(|error| format!("Risk-decision event hash is unreadable: {error}"))?;
+        let sequence_u64 = u64::try_from(sequence).unwrap_or(0);
+
+        let fail = |reason: &str| {
+            invalid_status(
+                broker_server,
+                account_login,
+                event_count,
+                previous.clone(),
+                sequence_u64,
+                reason,
+            )
+        };
+        if sequence_u64 != expected_sequence {
+            return Ok(fail("Risk-decision sequence is discontinuous."));
+        }
+        if !matches!(decision.as_str(), "SIZED_WITH_LIMITATIONS" | "BLOCKED")
+            || !valid_identity(&decision_id, 64)
+            || !valid_identity(&symbol, 64)
+            || decided_at_ms <= 0
+            || snapshot_sequence <= 0
+            || specification_revision <= 0
+            || !is_sha256(&request_hash)
+            || !is_sha256(&result_hash)
+            || !is_sha256(&specification_hash)
+            || !is_sha256(&previous_hash)
+            || !is_sha256(&stored_event_hash)
+        {
+            return Ok(fail("Risk-decision row metadata is malformed."));
+        }
+        if previous_hash != previous {
+            return Ok(fail(
+                "Risk-decision previous hash does not match the verified chain head.",
+            ));
+        }
+        if sha256_hex(request_json.as_bytes()) != request_hash
+            || sha256_hex(result_json.as_bytes()) != result_hash
+        {
+            return Ok(fail(
+                "Risk-decision request or result payload hash does not match its stored bytes.",
+            ));
+        }
+        let request: Value = match serde_json::from_str(&request_json) {
+            Ok(value) => value,
+            Err(_) => return Ok(fail("Risk-decision request payload is not valid JSON.")),
+        };
+        let result: Value = match serde_json::from_str(&result_json) {
+            Ok(value) => value,
+            Err(_) => return Ok(fail("Risk-decision result payload is not valid JSON.")),
+        };
+        if canonical_json(&request).ok().as_deref() != Some(request_json.as_str())
+            || canonical_json(&result).ok().as_deref() != Some(result_json.as_str())
+        {
+            return Ok(fail(
+                "Risk-decision payload is not in canonical serialized form.",
+            ));
+        }
+        let snapshot_sequence = u64::try_from(snapshot_sequence)
+            .map_err(|_| "Risk-decision snapshot sequence is negative.".to_string())?;
+        let specification_revision = u64::try_from(specification_revision)
+            .map_err(|_| "Risk-decision specification revision is negative.".to_string())?;
+        if request.get("brokerServer").and_then(Value::as_str) != Some(broker_server)
+            || request.get("accountLogin").and_then(Value::as_str) != Some(account_login)
+            || request.get("symbol").and_then(Value::as_str) != Some(symbol.as_str())
+            || result.get("brokerServer").and_then(Value::as_str) != Some(broker_server)
+            || result.get("accountLogin").and_then(Value::as_str) != Some(account_login)
+            || result.get("symbol").and_then(Value::as_str) != Some(symbol.as_str())
+            || result.get("decision").and_then(Value::as_str) != Some(decision.as_str())
+            || result.get("snapshotSequence").and_then(Value::as_u64) != Some(snapshot_sequence)
+            || result.get("specificationRevision").and_then(Value::as_u64)
+                != Some(specification_revision)
+            || result
+                .get("specificationFingerprintSha256")
+                .and_then(Value::as_str)
+                != Some(specification_hash.as_str())
+            || result.get("calculatedAtMs").and_then(Value::as_i64) != Some(decided_at_ms)
+        {
+            return Ok(fail(
+                "Risk-decision payload identity does not match its immutable ledger columns.",
+            ));
+        }
+        let calculated = event_sha256(RiskDecisionEventMaterial {
+            broker_server,
+            account_login,
+            sequence: sequence_u64,
+            decision_id: &decision_id,
+            symbol: &symbol,
+            decision: &decision,
+            decided_at_ms,
+            request_sha256: &request_hash,
+            result_sha256: &result_hash,
+            snapshot_sequence,
+            specification_revision,
+            specification_fingerprint_sha256: &specification_hash,
+            previous_sha256: &previous_hash,
+        });
+        if calculated != stored_event_hash {
+            return Ok(fail(
+                "Risk-decision event hash does not match its canonical event material.",
+            ));
+        }
+        previous = stored_event_hash;
+        event_count = event_count
+            .checked_add(1)
+            .ok_or_else(|| "Risk-decision event count overflowed.".to_string())?;
+        expected_sequence = expected_sequence
+            .checked_add(1)
+            .ok_or_else(|| "Risk-decision sequence overflowed.".to_string())?;
+    }
+    Ok(Mt5RiskDecisionLedgerStatus {
+        valid: true,
+        broker_server: broker_server.into(),
+        account_login: account_login.into(),
+        event_count,
+        head_sha256: previous,
+        first_invalid_sequence: None,
+        integrity_error: None,
+    })
+}
+
+fn validate_record(record: &Mt5RiskDecisionRecord) -> Result<(String, String), String> {
+    if !valid_identity(&record.broker_server, 128)
+        || !valid_identity(&record.account_login, 32)
+        || !valid_identity(&record.symbol, 64)
+        || !matches!(
+            record.decision.as_str(),
+            "SIZED_WITH_LIMITATIONS" | "BLOCKED"
+        )
+        || record.decided_at_ms <= 0
+        || record.snapshot_sequence == 0
+        || i64::try_from(record.snapshot_sequence).is_err()
+        || record.specification_revision == 0
+        || i64::try_from(record.specification_revision).is_err()
+        || !is_sha256(&record.specification_fingerprint_sha256)
+    {
+        return Err("Risk-decision ledger record has invalid account, instrument, decision, time, or provenance metadata.".into());
+    }
+    let request_json = canonical_json(&record.request)?;
+    let result_json = canonical_json(&record.result)?;
+    if record.request.get("brokerServer").and_then(Value::as_str)
+        != Some(record.broker_server.as_str())
+        || record.request.get("accountLogin").and_then(Value::as_str)
+            != Some(record.account_login.as_str())
+        || record.request.get("symbol").and_then(Value::as_str) != Some(record.symbol.as_str())
+        || record.result.get("brokerServer").and_then(Value::as_str)
+            != Some(record.broker_server.as_str())
+        || record.result.get("accountLogin").and_then(Value::as_str)
+            != Some(record.account_login.as_str())
+        || record.result.get("symbol").and_then(Value::as_str) != Some(record.symbol.as_str())
+        || record.result.get("decision").and_then(Value::as_str) != Some(record.decision.as_str())
+        || record
+            .result
+            .get("snapshotSequence")
+            .and_then(Value::as_u64)
+            != Some(record.snapshot_sequence)
+        || record
+            .result
+            .get("specificationRevision")
+            .and_then(Value::as_u64)
+            != Some(record.specification_revision)
+        || record
+            .result
+            .get("specificationFingerprintSha256")
+            .and_then(Value::as_str)
+            != Some(record.specification_fingerprint_sha256.as_str())
+        || record.result.get("calculatedAtMs").and_then(Value::as_i64) != Some(record.decided_at_ms)
+    {
+        return Err("Risk-decision request/result identity is not bound to the authenticated account snapshot.".into());
+    }
+    Ok((request_json, result_json))
+}
+
+fn append_internal(
+    path: &Path,
+    record: &Mt5RiskDecisionRecord,
+    checkpoint_store: Option<&dyn CheckpointStore>,
+) -> Result<Mt5RiskDecisionReceipt, String> {
+    let (request_json, result_json) = validate_record(record)?;
+    let mut connection = open_connection(path)?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| format!("Risk-decision append transaction could not begin: {error}"))?;
+    let verified = verify_chain(&transaction, &record.broker_server, &record.account_login)?;
+    if !verified.valid {
+        return Err(format!(
+            "Risk-decision ledger is corrupt at sequence {:?}; refusing to append: {}",
+            verified.first_invalid_sequence,
+            verified
+                .integrity_error
+                .unwrap_or_else(|| "integrity verification failed".into())
+        ));
+    }
+    if verified.event_count >= MAX_LEDGER_EVENTS_PER_ACCOUNT {
+        return Err("Risk-decision account ledger reached its configured event limit.".into());
+    }
+    let sequence = verified
+        .event_count
+        .checked_add(1)
+        .ok_or_else(|| "Risk-decision sequence overflowed.".to_string())?;
+    let previous_sha256 = verified.head_sha256.clone();
+    let decision_id = Uuid::new_v4().to_string();
+    let request_sha256 = sha256_hex(request_json.as_bytes());
+    let result_sha256 = sha256_hex(result_json.as_bytes());
+    let event_hash = event_sha256(RiskDecisionEventMaterial {
+        broker_server: &record.broker_server,
+        account_login: &record.account_login,
+        sequence,
+        decision_id: &decision_id,
+        symbol: &record.symbol,
+        decision: &record.decision,
+        decided_at_ms: record.decided_at_ms,
+        request_sha256: &request_sha256,
+        result_sha256: &result_sha256,
+        snapshot_sequence: record.snapshot_sequence,
+        specification_revision: record.specification_revision,
+        specification_fingerprint_sha256: &record.specification_fingerprint_sha256,
+        previous_sha256: &previous_sha256,
+    });
+    if let Some(store) = checkpoint_store {
+        let anchored = verify_external_checkpoint(&verified, store)?;
+        if !anchored.valid {
+            return Err(format!(
+                "Risk-decision ledger checkpoint mismatch; refusing to append: {}",
+                anchored
+                    .integrity_error
+                    .unwrap_or_else(|| "checkpoint verification failed".into())
+            ));
+        }
+        let mut checkpoint = store
+            .read(&record.broker_server, &record.account_login)?
+            .ok_or_else(|| "Risk-decision checkpoint is missing; refusing to write.".to_string())?;
+        if checkpoint.pending.is_some() {
+            return Err(
+                "Risk-decision checkpoint has an unresolved append; manual recovery is required."
+                    .into(),
+            );
+        }
+        checkpoint.pending = Some(PendingCheckpoint {
+            event_count: sequence,
+            head_sha256: event_hash.clone(),
+        });
+        store.write(&record.broker_server, &record.account_login, &checkpoint)?;
+    }
+
+    transaction
+        .execute(
+            "INSERT INTO mt5_risk_decision_events
+             (broker_server, account_login, sequence, decision_id, symbol, decision, decided_at_ms,
+              request_json, request_sha256, result_json, result_sha256, snapshot_sequence,
+              specification_revision, specification_fingerprint_sha256, previous_sha256, event_sha256)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            params![
+                record.broker_server,
+                record.account_login,
+                sequence as i64,
+                decision_id,
+                record.symbol,
+                record.decision,
+                record.decided_at_ms,
+                request_json,
+                request_sha256,
+                result_json,
+                result_sha256,
+                record.snapshot_sequence as i64,
+                record.specification_revision as i64,
+                record.specification_fingerprint_sha256,
+                previous_sha256,
+                event_hash
+            ],
+        )
+        .map_err(|error| format!("Risk-decision event could not be appended: {error}"))?;
+    transaction
+        .commit()
+        .map_err(|error| format!("Risk-decision event commit failed: {error}"))?;
+
+    if let Some(store) = checkpoint_store {
+        store.write(
+            &record.broker_server,
+            &record.account_login,
+            &LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: sequence,
+                head_sha256: event_hash.clone(),
+                pending: None,
+            },
+        )?;
+    }
+    let committed_event: (String, String, String, String) = connection
+        .query_row(
+            "SELECT request_sha256, result_sha256, previous_sha256, event_sha256
+             FROM mt5_risk_decision_events
+             WHERE broker_server=?1 AND account_login=?2 AND sequence=?3",
+            params![
+                record.broker_server,
+                record.account_login,
+                i64::try_from(sequence).map_err(|_| {
+                    "Risk-decision sequence exceeds SQLite integer capacity.".to_string()
+                })?,
+            ],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|error| format!("Committed risk-decision event could not be re-read: {error}"))?;
+    if committed_event.0 != request_sha256
+        || committed_event.1 != result_sha256
+        || committed_event.2 != previous_sha256
+        || committed_event.3 != event_hash
+    {
+        return Err(
+            "Committed risk-decision receipt did not match its immutable event record.".into(),
+        );
+    }
+
+    Ok(Mt5RiskDecisionReceipt {
+        decision_id,
+        broker_server: record.broker_server.clone(),
+        account_login: record.account_login.clone(),
+        symbol: record.symbol.clone(),
+        decision: record.decision.clone(),
+        sequence,
+        decided_at_ms: record.decided_at_ms,
+        request_sha256,
+        result_sha256,
+        snapshot_sequence: record.snapshot_sequence,
+        specification_revision: record.specification_revision,
+        specification_fingerprint_sha256: record.specification_fingerprint_sha256.clone(),
+        previous_sha256,
+        event_sha256: event_hash,
+    })
+}
+
+#[cfg(not(test))]
+pub(crate) fn append(
+    path: &Path,
+    record: &Mt5RiskDecisionRecord,
+) -> Result<Mt5RiskDecisionReceipt, String> {
+    append_internal(path, record, Some(&KeyringCheckpointStore))
+}
+
+#[cfg(test)]
+pub(crate) fn append(
+    path: &Path,
+    record: &Mt5RiskDecisionRecord,
+) -> Result<Mt5RiskDecisionReceipt, String> {
+    append_internal(path, record, None)
+}
+
+fn status_internal(
+    path: &Path,
+    broker_server: &str,
+    account_login: &str,
+    checkpoint_store: Option<&dyn CheckpointStore>,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    if !valid_identity(broker_server, 128) || !valid_identity(account_login, 32) {
+        return Err(
+            "Risk-decision ledger status requires a valid broker server and account identity."
+                .into(),
+        );
+    }
+    let connection = open_connection(path)?;
+    let verified = verify_chain(&connection, broker_server, account_login)?;
+    if let Some(store) = checkpoint_store {
+        verify_external_checkpoint(&verified, store)
+    } else {
+        Ok(verified)
+    }
+}
+
+#[cfg(not(test))]
+pub(crate) fn status(
+    path: &Path,
+    broker_server: &str,
+    account_login: &str,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    status_internal(
+        path,
+        broker_server,
+        account_login,
+        Some(&KeyringCheckpointStore),
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn status(
+    path: &Path,
+    broker_server: &str,
+    account_login: &str,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    status_internal(path, broker_server, account_login, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::{sync::Arc, thread};
+
+    #[derive(Default)]
+    struct MemoryCheckpointStore {
+        values: std::sync::Mutex<std::collections::HashMap<String, LedgerCheckpoint>>,
+        writes: std::sync::Mutex<usize>,
+        fail_on_write: std::sync::Mutex<Option<usize>>,
+    }
+
+    impl MemoryCheckpointStore {
+        fn key(broker_server: &str, account_login: &str) -> String {
+            format!("{broker_server}\\n{account_login}")
+        }
+
+        fn fail_on_write(&self, write_number: usize) {
+            *self.writes.lock().unwrap() = 0;
+            *self.fail_on_write.lock().unwrap() = Some(write_number);
+        }
+
+        fn corrupt(&self, broker_server: &str, account_login: &str) {
+            if let Some(value) = self
+                .values
+                .lock()
+                .unwrap()
+                .get_mut(&Self::key(broker_server, account_login))
+            {
+                value.head_sha256 = "not-a-checkpoint-hash".into();
+            }
+        }
+
+        fn restore(&self, broker_server: &str, account_login: &str, value: LedgerCheckpoint) {
+            self.values
+                .lock()
+                .unwrap()
+                .insert(Self::key(broker_server, account_login), value);
+        }
+    }
+
+    impl CheckpointStore for MemoryCheckpointStore {
+        fn read(
+            &self,
+            broker_server: &str,
+            account_login: &str,
+        ) -> Result<Option<LedgerCheckpoint>, String> {
+            Ok(self
+                .values
+                .lock()
+                .unwrap()
+                .get(&Self::key(broker_server, account_login))
+                .cloned())
+        }
+
+        fn write(
+            &self,
+            broker_server: &str,
+            account_login: &str,
+            checkpoint: &LedgerCheckpoint,
+        ) -> Result<(), String> {
+            let mut writes = self.writes.lock().unwrap();
+            *writes += 1;
+            if *self.fail_on_write.lock().unwrap() == Some(*writes) {
+                return Err("Injected checkpoint write failure.".into());
+            }
+            self.values
+                .lock()
+                .unwrap()
+                .insert(Self::key(broker_server, account_login), checkpoint.clone());
+            Ok(())
+        }
+    }
+
+    fn provisioned_store(path: &Path) -> MemoryCheckpointStore {
+        let store = MemoryCheckpointStore::default();
+        initialize_genesis_checkpoint(path, "Broker-Live", "12345", &store).unwrap();
+        store
+    }
+
+    fn temp_path() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("atos-mt5-risk-ledger-{}.sqlite3", Uuid::new_v4()))
+    }
+
+    fn initialized_path() -> std::path::PathBuf {
+        let path = temp_path();
+        let connection = open_connection(&path).unwrap();
+        initialize(&connection).unwrap();
+        drop(connection);
+        path
+    }
+
+    fn sample_record(account: &str, decision: &str, sequence: u64) -> Mt5RiskDecisionRecord {
+        let request = serde_json::json!({
+            "brokerServer": "Broker-Live",
+            "accountLogin": account,
+            "symbol": "XAUUSD.a",
+            "side": "BUY",
+            "stopLossPrice": 2300.0,
+            "riskPercent": 1.0
+        });
+        let result = serde_json::json!({
+            "brokerServer": "Broker-Live",
+            "accountLogin": account,
+            "symbol": "XAUUSD.a",
+            "decision": decision,
+            "calculatedAtMs": 1_800_000_000_000_i64 + sequence as i64,
+            "snapshotSequence": sequence,
+            "specificationRevision": 3,
+            "specificationFingerprintSha256": "a".repeat(64),
+            "normalizedVolume": 0.01
+        });
+        Mt5RiskDecisionRecord {
+            broker_server: "Broker-Live".into(),
+            account_login: account.into(),
+            symbol: "XAUUSD.a".into(),
+            decision: decision.into(),
+            decided_at_ms: 1_800_000_000_000_i64 + sequence as i64,
+            request,
+            result,
+            snapshot_sequence: sequence,
+            specification_revision: 3,
+            specification_fingerprint_sha256: "a".repeat(64),
+        }
+    }
+
+    #[test]
+    fn checkpoint_pending_intent_requires_manual_recovery_when_database_is_at_old_head() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 2,
+            head_sha256: "a".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 2,
+            head_sha256: "a".repeat(64),
+            pending: Some(PendingCheckpoint {
+                event_count: 3,
+                head_sha256: "b".repeat(64),
+            }),
+        };
+        assert!(!checkpoint_matches(&status, &checkpoint));
+        let pending = checkpoint.pending.as_ref().unwrap();
+        assert_eq!(pending.event_count, status.event_count + 1);
+        assert_ne!(pending.head_sha256, status.head_sha256);
+    }
+
+    #[test]
+    fn checkpoint_pending_intent_matches_committed_database_head() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 3,
+            head_sha256: "b".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 2,
+            head_sha256: "a".repeat(64),
+            pending: Some(PendingCheckpoint {
+                event_count: 3,
+                head_sha256: "b".repeat(64),
+            }),
+        };
+        let pending = checkpoint.pending.as_ref().unwrap();
+        assert_eq!(status.event_count, pending.event_count);
+        assert_eq!(status.head_sha256, pending.head_sha256);
+    }
+
+    #[test]
+    fn external_checkpoint_detects_deleted_tail_and_missing_history() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 1,
+            head_sha256: "a".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let original = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 2,
+            head_sha256: "b".repeat(64),
+            pending: None,
+        };
+        assert!(!checkpoint_matches(&status, &original));
+        let matching = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 1,
+            head_sha256: "a".repeat(64),
+            pending: None,
+        };
+        assert!(checkpoint_matches(&status, &matching));
+        let wrong_version = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION + 1,
+            event_count: 1,
+            head_sha256: "a".repeat(64),
+            pending: None,
+        };
+        assert!(!checkpoint_matches(&status, &wrong_version));
+    }
+
+    #[test]
+    fn missing_checkpoint_rejects_nonempty_history_without_resetting_anchor() {
+        let status = Mt5RiskDecisionLedgerStatus {
+            valid: true,
+            broker_server: "Broker-Live".into(),
+            account_login: "12345".into(),
+            event_count: 4,
+            head_sha256: "a".repeat(64),
+            first_invalid_sequence: None,
+            integrity_error: None,
+        };
+        let result = missing_checkpoint_status(&status);
+        assert!(!result.valid);
+        assert_eq!(result.event_count, 4);
+        assert_eq!(result.first_invalid_sequence, Some(1));
+        assert!(result
+            .integrity_error
+            .unwrap()
+            .contains("refusing to reset"));
+    }
+
+    #[test]
+    fn external_checkpoint_rejects_a_deleted_final_event() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        let final_receipt = append(&path, &sample_record("12345", "BLOCKED", 2)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
+             DELETE FROM mt5_risk_decision_events WHERE sequence=2;",
+            )
+            .unwrap();
+        let truncated = verify_chain(&connection, "Broker-Live", "12345").unwrap();
+        assert!(truncated.valid);
+        assert_eq!(truncated.event_count, 1);
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: final_receipt.sequence,
+            head_sha256: final_receipt.event_sha256,
+            pending: None,
+        };
+        let result = compare_checkpoint(&truncated, &checkpoint);
+        assert!(!result.valid);
+        assert!(result.integrity_error.unwrap().contains("checkpoint"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn external_checkpoint_rejects_a_deleted_multi_event_suffix() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        append(&path, &sample_record("12345", "BLOCKED", 2)).unwrap();
+        append(&path, &sample_record("12345", "BLOCKED", 3)).unwrap();
+        let final_receipt = append(&path, &sample_record("12345", "BLOCKED", 4)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_delete;
+             DELETE FROM mt5_risk_decision_events WHERE sequence>=3;",
+            )
+            .unwrap();
+        let truncated = verify_chain(&connection, "Broker-Live", "12345").unwrap();
+        assert!(truncated.valid);
+        assert_eq!(truncated.event_count, 2);
+        let checkpoint = LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: final_receipt.sequence,
+            head_sha256: final_receipt.event_sha256,
+            pending: None,
+        };
+        let result = compare_checkpoint(&truncated, &checkpoint);
+        assert!(!result.valid);
+        assert!(result.integrity_error.unwrap().contains("checkpoint"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn pending_checkpoint_write_failure_does_not_commit_an_event() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        store.fail_on_write(1);
+        assert!(
+            append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err()
+        );
+        let status =
+            verify_chain(&open_connection(&path).unwrap(), "Broker-Live", "12345").unwrap();
+        assert!(status.valid);
+        assert_eq!(status.event_count, 0);
+        let checkpoint = store.read("Broker-Live", "12345").unwrap().unwrap();
+        assert_eq!(checkpoint.event_count, 0);
+        assert!(checkpoint.pending.is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn final_checkpoint_write_failure_recovers_from_the_committed_event() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        store.fail_on_write(2);
+        assert!(
+            append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err()
+        );
+        let pending = store.read("Broker-Live", "12345").unwrap().unwrap();
+        assert!(pending.pending.is_some());
+        let recovered = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(recovered.valid);
+        assert_eq!(recovered.event_count, 1);
+        assert!(store
+            .read("Broker-Live", "12345")
+            .unwrap()
+            .unwrap()
+            .pending
+            .is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn pending_checkpoint_recovers_only_when_the_committed_database_matches() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        let receipt =
+            append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        store.restore(
+            "Broker-Live",
+            "12345",
+            LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: 0,
+                head_sha256: GENESIS_SHA256.into(),
+                pending: Some(PendingCheckpoint {
+                    event_count: 1,
+                    head_sha256: receipt.event_sha256,
+                }),
+            },
+        );
+        let recovered = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(recovered.valid);
+        assert_eq!(recovered.event_count, 1);
+        assert!(store
+            .read("Broker-Live", "12345")
+            .unwrap()
+            .unwrap()
+            .pending
+            .is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn pending_checkpoint_does_not_recover_when_database_commit_is_missing() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        store.restore(
+            "Broker-Live",
+            "12345",
+            LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: 0,
+                head_sha256: GENESIS_SHA256.into(),
+                pending: Some(PendingCheckpoint {
+                    event_count: 1,
+                    head_sha256: "b".repeat(64),
+                }),
+            },
+        );
+        let result = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!result.valid);
+        assert!(result.integrity_error.unwrap().contains("interrupted"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_appends_share_one_external_checkpoint_and_remain_contiguous() {
+        let path = Arc::new(initialized_path());
+        let store = Arc::new(provisioned_store(path.as_path()));
+        let mut workers = Vec::new();
+        for index in 0..8_u64 {
+            let worker_path = Arc::clone(&path);
+            let worker_store = Arc::clone(&store);
+            workers.push(thread::spawn(move || {
+                append_internal(
+                    worker_path.as_path(),
+                    &sample_record("12345", "BLOCKED", index + 1),
+                    Some(worker_store.as_ref()),
+                )
+                .unwrap()
+                .sequence
+            }));
+        }
+        let mut sequences: Vec<u64> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
+        sequences.sort_unstable();
+        assert_eq!(sequences, (1..=8).collect::<Vec<_>>());
+        let result =
+            status_internal(path.as_path(), "Broker-Live", "12345", Some(store.as_ref())).unwrap();
+        assert!(result.valid);
+        assert_eq!(result.event_count, 8);
+        let _ = std::fs::remove_file(path.as_path());
+    }
+
+    #[test]
+    fn injected_checkpoint_store_detects_tail_deletion_after_trigger_bypass() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        let receipt =
+            append_internal(&path, &sample_record("12345", "BLOCKED", 2), Some(&store)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        connection.execute_batch("DROP TRIGGER trg_mt5_risk_decision_events_no_delete; DELETE FROM mt5_risk_decision_events WHERE sequence=2;").unwrap();
+        let result = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!result.valid);
+        assert_eq!(result.first_invalid_sequence, Some(2));
+        assert!(result.integrity_error.unwrap().contains("checkpoint"));
+        assert_eq!(receipt.sequence, 2);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn missing_or_corrupt_checkpoint_fails_closed_without_reanchoring() {
+        let path = initialized_path();
+        let store = MemoryCheckpointStore::default();
+        let missing = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!missing.valid);
+        assert!(missing.integrity_error.unwrap().contains("missing"));
+        initialize_genesis_checkpoint(&path, "Broker-Live", "12345", &store).unwrap();
+        append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        store.corrupt("Broker-Live", "12345");
+        let corrupted = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!corrupted.valid);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn restored_old_checkpoint_and_rolled_back_database_are_detected() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        let old_checkpoint = store.read("Broker-Live", "12345").unwrap().unwrap();
+        append_internal(&path, &sample_record("12345", "BLOCKED", 2), Some(&store)).unwrap();
+        store.restore("Broker-Live", "12345", old_checkpoint);
+        let restored = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!restored.valid);
+        assert!(restored.integrity_error.unwrap().contains("checkpoint"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn account_checkpoints_are_isolated() {
+        let path = initialized_path();
+        let store = MemoryCheckpointStore::default();
+        initialize_genesis_checkpoint(&path, "Broker-Live", "12345", &store).unwrap();
+        initialize_genesis_checkpoint(&path, "Broker-Live", "67890", &store).unwrap();
+        append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        let first = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        let second = status_internal(&path, "Broker-Live", "67890", Some(&store)).unwrap();
+        assert!(first.valid);
+        assert!(second.valid);
+        assert_eq!(first.event_count, 1);
+        assert_eq!(second.event_count, 0);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn append_records_both_approved_and_blocked_decisions_in_one_account_chain() {
+        let path = initialized_path();
+        let approved = append(&path, &sample_record("12345", "SIZED_WITH_LIMITATIONS", 7)).unwrap();
+        let blocked = append(&path, &sample_record("12345", "BLOCKED", 8)).unwrap();
+        assert_eq!(approved.sequence, 1);
+        assert_eq!(approved.previous_sha256, GENESIS_SHA256);
+        assert_eq!(blocked.sequence, 2);
+        assert_eq!(blocked.previous_sha256, approved.event_sha256);
+        let status = status(&path, "Broker-Live", "12345").unwrap();
+        assert!(status.valid);
+        assert_eq!(status.event_count, 2);
+        assert_eq!(status.head_sha256, blocked.event_sha256);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn decision_chains_are_isolated_by_authenticated_account_identity() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        append(&path, &sample_record("67890", "BLOCKED", 1)).unwrap();
+        let first = status(&path, "Broker-Live", "12345").unwrap();
+        let second = status(&path, "Broker-Live", "67890").unwrap();
+        assert_eq!(first.event_count, 1);
+        assert_eq!(second.event_count, 1);
+        assert_ne!(first.head_sha256, second.head_sha256);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn identity_mismatch_is_rejected_before_the_ledger_changes() {
+        let path = initialized_path();
+        let mut record = sample_record("12345", "BLOCKED", 1);
+        record.request["accountLogin"] = Value::String("99999".into());
+        assert!(append(&path, &record).is_err());
+        let status = status(&path, "Broker-Live", "12345").unwrap();
+        assert_eq!(status.event_count, 0);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn weakened_immutability_trigger_fails_closed_on_reopen() {
+        let path = initialized_path();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
+             CREATE TRIGGER trg_mt5_risk_decision_events_no_update
+             BEFORE UPDATE ON mt5_risk_decision_events BEGIN SELECT RAISE(IGNORE); END;",
+            )
+            .unwrap();
+        assert!(initialize(&connection)
+            .unwrap_err()
+            .contains("differs from the required append-only policy"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn update_and_delete_are_rejected_by_append_only_triggers() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        assert!(connection
+            .execute(
+                "UPDATE mt5_risk_decision_events SET decision='SIZED_WITH_LIMITATIONS'",
+                []
+            )
+            .is_err());
+        assert!(connection
+            .execute("DELETE FROM mt5_risk_decision_events", [])
+            .is_err());
+        assert!(status(&path, "Broker-Live", "12345").unwrap().valid);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn chain_verification_detects_payload_tampering_even_after_trigger_bypass() {
+        let path = initialized_path();
+        append(&path, &sample_record("12345", "BLOCKED", 1)).unwrap();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "DROP TRIGGER trg_mt5_risk_decision_events_no_update;
+             UPDATE mt5_risk_decision_events SET result_json='{}';",
+            )
+            .unwrap();
+        let status = status(&path, "Broker-Live", "12345").unwrap();
+        assert!(!status.valid);
+        assert_eq!(status.first_invalid_sequence, Some(1));
+        assert!(status.integrity_error.unwrap().contains("payload hash"));
+        assert!(append(&path, &sample_record("12345", "BLOCKED", 2)).is_err());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_account_appends_receive_unique_contiguous_sequences() {
+        let path = Arc::new(initialized_path());
+        let mut workers = Vec::new();
+        for index in 0..8_u64 {
+            let worker_path = Arc::clone(&path);
+            workers.push(thread::spawn(move || {
+                append(
+                    worker_path.as_path(),
+                    &sample_record("12345", "BLOCKED", index + 1),
+                )
+                .unwrap()
+                .sequence
+            }));
+        }
+        let mut sequences: Vec<u64> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
+        sequences.sort_unstable();
+        assert_eq!(sequences, (1..=8).collect::<Vec<_>>());
+        let status = status(path.as_path(), "Broker-Live", "12345").unwrap();
+        assert!(status.valid);
+        assert_eq!(status.event_count, 8);
+        let _ = std::fs::remove_file(path.as_path());
+    }
+}

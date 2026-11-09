@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "strict-ta-decision-gate.v4",
+  "masterListVersion": "1.0.0",
+  "expectedEntryCount": 364,
+  "mode": "strict_all_concepts_required",
+  "downstreamHandoffRequires": [
+    "exactly_364_unique_catalog_entries",
+    "exactly_one_assessment_per_catalog_id",
+    "no_unknown_or_duplicate_assessments",
+    "assessment_contract_and_master_list_version_match",
+    "assessment_identity_matches_category_group_name_and_routed_specialist",
+    "all_assessments_have_valid_timestamp",
+    "evaluated_results_have_evidence_refs_explicit_result_implementation_version_data_snapshot_and_look_ahead_safety",
+    "not_applicable_has_substantive_rationale_and_auditable_contextual_evidence",
+    "zero_catalog_only_claimed_as_evaluated",
+    "zero_unsupported",
+    "zero_insufficient_data",
+    "validated_market_data_with_source_timestamp_symbol_timeframe_and_sha256_snapshot_fingerprint",
+    "risk_gateway_passed",
+    "catalog_must_match_code_owned_registry_exactly_including_group_and_kind",
+    "catalog_only_must_remain_unsupported_until_reviewed_promotion",
+    "intent_must_be_research_or_paper_trade",
+    "unmodified_unexpired_rust_issued_work_plan_id",
+    "provider_snapshot_rebuilt_inside_tauri_rust_command",
+    "connected_fresh_provider_status_and_registered_source",
+    "all_candles_fully_closed_by_snapshot_as_of_cutoff",
+    "rust_owned_account_risk_preflight_not_caller_boolean",
+    "exactly_nine_durable_specialist_dispatch_receipts_for_the_current_work_plan",
+    "each_receipt_binds_trusted_agent_category_task_input_hash_output_assessment_hash_full_category_coverage_and_completion_time",
+    "specialist_receipt_rows_and_recorded_events_match_the_verified_append_only_audit_chain",
+    "no_missing_duplicate_expired_or_mismatched_specialist_receipts"
+  ],
+  "assessmentStatuses": [
+    "evaluated",
+    "insufficient_data",
+    "not_applicable",
+    "unsupported"
+  ],
+  "blockingStatuses": [
+    "insufficient_data",
+    "unsupported"
+  ],
+  "liveExecutionAuthorized": false,
+  "note": "The code-owned registry is authoritative; each assessment must carry an exact catalog identity and be attributed to the single specialist assigned to that category. Agent-supplied availability cannot promote concepts. With 357 catalog-only entries, actionable handoff intentionally remains blocked. Live execution is never authorized. Work plans are stored in a bounded durable SQLite registry for 15 minutes, consumed exactly once through an atomic write transaction, and rejected if modified, expired, or replayed. Each consumed plan creates a durable attempt record; completed results persist the submitted assessments and audit receipt before returning. Native commands re-read the Rust-owned provider snapshot and account risk preflight. This does not replace the order-specific paper-order risk gateway. Schema v3 adds append-only specialist dispatch receipts cross-linked to the durable audit chain. Receipt rows are not exposed as a frontend command. Current providerDispatchConfigured=false means no real specialist runtime is configured; receipt requirements intentionally block completion rather than infer dispatch from a work plan or prompt.",
+  "assessmentContractVersion": "strict-ta-assessment.v1",
+  "runtimeAuthority": "Rust: src-tauri/src/application/strict_analysis.rs plus src-tauri/src/infrastructure/providers/public_market.rs provider boundary and src-tauri/src/runtime/trading_core.rs account risk preflight",
+  "workPlanStatus": "work_plan_created_not_dispatched",
+  "providerDispatchConfigured": false,
+  "downstreamPayloadRule": "A nextLayerPayload is emitted only after all 364 authoritative per-item assessments, exactly nine verified durable specialist receipts for the same issued work plan, and all data/risk contracts pass. The current build has no configured trusted provider dispatcher, so handoff remains blocked.",
+  "rustCommands": [
+    "create_strict_analysis_work_plan",
+    "evaluate_strict_analysis_completion"
+  ],
+  "requiredSpecialistReceiptCount": 9
+}

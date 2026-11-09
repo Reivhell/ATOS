@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Strict Analysis Audit Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "workPlanId",
+    "masterListVersion",
+    "symbol",
+    "timeframe",
+    "asOf",
+    "datasetSha256",
+    "assessmentBundleSha256",
+    "categoryAssessmentSha256",
+    "coverageRequired",
+    "coverageReceived",
+    "coverageAssessed",
+    "coverageMissing",
+    "coverageDuplicate",
+    "coverageMalformed",
+    "coverageUnsupported",
+    "coverageInsufficientData",
+    "coverageNotApplicable",
+    "coverageEvaluated",
+    "coverageCatalogOnly",
+    "decision",
+    "reasonsSha256",
+    "generatedAt",
+    "receiptSha256",
+    "liveExecutionAuthorized"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "strict-analysis-audit.v1"
+    },
+    "workPlanId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "masterListVersion": {
+      "const": "1.0.0"
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timeframe": {
+      "type": "string",
+      "minLength": 1
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "datasetSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "assessmentBundleSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "categoryAssessmentSha256": {
+      "type": "object",
+      "minProperties": 9,
+      "maxProperties": 9,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "coverageRequired": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageReceived": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageAssessed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageMissing": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageDuplicate": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageMalformed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageUnsupported": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageInsufficientData": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageNotApplicable": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageEvaluated": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverageCatalogOnly": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decision": {
+      "enum": [
+        "BLOCK",
+        "ALLOW_RESEARCH",
+        "ALLOW_TO_NEXT_LAYER"
+      ]
+    },
+    "reasonsSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "receiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "liveExecutionAuthorized": {
+      "const": false
+    }
+  },
+  "description": "Integrity receipt, not a digital signature or proof that any external agent executed. To recompute receiptSha256, serialize the receipt in native struct field order with receiptSha256 set to an empty string."
+}

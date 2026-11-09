@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-trading-os.invalid/schemas/strict-ta-work-plan.v1.json",
+  "title": "Strict Trading Analysis Work Plan",
+  "description": "Native Rust-issued, short-lived plan assigning every master-list catalog ID to its sole category specialist. The Rust-issued durable SQLite registry is authoritative; plans are single-use, expire after 15 minutes, and schema validation alone does not authorize a plan.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "workPlanId",
+    "schemaVersion",
+    "decisionGateContractVersion",
+    "assessmentContractVersion",
+    "masterListVersion",
+    "symbol",
+    "timeframe",
+    "asOf",
+    "datasetSha256",
+    "expectedAssessmentCount",
+    "inventoryIdentity",
+    "dispatchStatus",
+    "liveExecutionAuthorized",
+    "entries",
+    "tasks"
+  ],
+  "properties": {
+    "workPlanId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "schemaVersion": {
+      "const": "strict-ta-work-plan.v1"
+    },
+    "decisionGateContractVersion": {
+      "const": "strict-ta-decision-gate.v4"
+    },
+    "assessmentContractVersion": {
+      "const": "strict-ta-assessment.v1"
+    },
+    "masterListVersion": {
+      "const": "1.0.0"
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 30
+    },
+    "timeframe": {
+      "enum": [
+        "1m",
+        "5m",
+        "15m",
+        "1h",
+        "4h",
+        "1d"
+      ]
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "datasetSha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "expectedAssessmentCount": {
+      "const": 364
+    },
+    "inventoryIdentity": {
+      "const": "rust-embedded-code-owned-master-list"
+    },
+    "dispatchStatus": {
+      "const": "work_plan_created_not_dispatched"
+    },
+    "liveExecutionAuthorized": {
+      "const": false
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 364,
+      "maxItems": 364,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "group",
+          "name",
+          "availability",
+          "kind"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "group": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "availability": {
+            "enum": [
+              "Catalog only",
+              "Calculated now",
+              "Workflow available"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "required": [
+          "agentId",
+          "category",
+          "knowledgePackPath",
+          "requiredAssessmentCount",
+          "catalogIds"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "agentId": {
+            "enum": [
+              "agent-01-smc-ict",
+              "agent-02-price-action",
+              "agent-03-support-resistance-trend",
+              "agent-04-technical-indicators",
+              "agent-05-order-flow-market-profile",
+              "agent-06-divergence-intermarket",
+              "agent-07-other-methods",
+              "agent-08-fundamental-macro",
+              "agent-09-risk-management-evaluation"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "knowledgePackPath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiredAssessmentCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "catalogIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  }
+}

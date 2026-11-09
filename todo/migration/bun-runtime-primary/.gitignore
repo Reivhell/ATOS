@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.svelte-kit/
+.env
+.env.*
+!.env.example
+src-tauri/target/
+evidence/
+.DS_Store
+*.log
+coverage/
+release-evidence/

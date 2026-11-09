@@ -1,0 +1,34 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDirs": [
+      "..",
+      "svelte"
+    ],
+    "allowArbitraryExtensions": true,
+    "noEmit": true,
+    "incremental": false,
+    "tsBuildInfoFile": "tsbuildinfo.json"
+  },
+  "files": [
+    "../node_modules/svelte-check/dist/src/svelte-shims-v4.d.ts",
+    "../node_modules/svelte/svelte-html.d.ts"
+  ],
+  "include": [
+    "../src/**/*.ts",
+    "../src/**/*.js",
+    "../src/**/*.svelte",
+    "../vite.config.ts",
+    "svelte/src/**/*.ts",
+    "svelte/src/**/*.js",
+    "svelte/src/**/*.d.svelte.ts",
+    "svelte/vite.config.ts"
+  ],
+  "exclude": [
+    "../src/App.svelte",
+    "../src/lib/components/AgentRuntimePanel.svelte",
+    "../src/lib/components/MarketDataPlatformPanel.svelte",
+    "../src/lib/components/MemeCoinHunterPanel.svelte",
+    "../src/lib/components/Mt5BridgePanel.svelte"
+  ]
+}
