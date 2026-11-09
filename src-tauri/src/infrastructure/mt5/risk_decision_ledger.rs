@@ -770,7 +770,7 @@ fn append_internal(
         .event_count
         .checked_add(1)
         .ok_or_else(|| "Risk-decision sequence overflowed.".to_string())?;
-    let previous_sha256 = verified.head_sha256;
+    let previous_sha256 = verified.head_sha256.clone();
     let decision_id = Uuid::new_v4().to_string();
     let request_sha256 = sha256_hex(request_json.as_bytes());
     let result_sha256 = sha256_hex(result_json.as_bytes());
