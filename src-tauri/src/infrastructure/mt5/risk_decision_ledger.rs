@@ -171,7 +171,7 @@ fn verify_external_checkpoint(
     }
 }
 
-fn initialize_genesis_checkpoint(
+pub(crate) fn initialize_genesis_checkpoint(
     path: &Path,
     broker_server: &str,
     account_login: &str,
@@ -1126,6 +1126,62 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn pending_checkpoint_recovers_only_when_the_committed_database_matches() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        let receipt = append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        store.restore("Broker-Live", "12345", LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 0,
+            head_sha256: GENESIS_SHA256.into(),
+            pending: Some(PendingCheckpoint { event_count: 1, head_sha256: receipt.event_sha256 }),
+        });
+        let recovered = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(recovered.valid);
+        assert_eq!(recovered.event_count, 1);
+        assert!(store.read("Broker-Live", "12345").unwrap().unwrap().pending.is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn pending_checkpoint_does_not_recover_when_database_commit_is_missing() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        store.restore("Broker-Live", "12345", LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 0,
+            head_sha256: GENESIS_SHA256.into(),
+            pending: Some(PendingCheckpoint { event_count: 1, head_sha256: "b".repeat(64) }),
+        });
+        let result = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!result.valid);
+        assert!(result.integrity_error.unwrap().contains("interrupted"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_appends_share_one_external_checkpoint_and_remain_contiguous() {
+        let path = Arc::new(initialized_path());
+        let store = Arc::new(provisioned_store(path.as_path()));
+        let mut workers = Vec::new();
+        for index in 0..8_u64 {
+            let worker_path = Arc::clone(&path);
+            let worker_store = Arc::clone(&store);
+            workers.push(thread::spawn(move || {
+                append_internal(worker_path.as_path(), &sample_record("12345", "BLOCKED", index + 1), Some(worker_store.as_ref())).unwrap().sequence
+            }));
+        }
+        let mut sequences: Vec<u64> = workers.into_iter().map(|worker| worker.join().unwrap()).collect();
+        sequences.sort_unstable();
+        assert_eq!(sequences, (1..=8).collect::<Vec<_>>());
+        let result = status_internal(path.as_path(), "Broker-Live", "12345", Some(store.as_ref())).unwrap();
+        assert!(result.valid);
+        assert_eq!(result.event_count, 8);
+        let _ = std::fs::remove_file(path.as_path());
+    }
+
     #[test]
     fn injected_checkpoint_store_detects_tail_deletion_after_trigger_bypass() {
         let path = initialized_path();
@@ -1152,7 +1208,8 @@ mod tests {
         initialize_genesis_checkpoint(&path, "Broker-Live", "12345", &store).unwrap();
         append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
         store.corrupt("Broker-Live", "12345");
-        assert!(status_internal(&path, "Broker-Live", "12345", Some(&store)).is_err());
+        let corrupted = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(!corrupted.valid);
         let _ = std::fs::remove_file(path);
     }
 

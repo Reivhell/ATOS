@@ -440,6 +440,10 @@ impl Mt5MarketDataStore {
         &self.path
     }
 
+    pub fn initialize_risk_decision_ledger_checkpoint(&self, broker_server: &str, account_login: &str) -> Result<(), String> {
+        risk_decision_ledger::initialize_genesis_checkpoint(&self.path, broker_server, account_login, &super::risk_decision_ledger::KeyringCheckpointStore)
+    }
+
     pub fn append_risk_decision(&self, record: &Mt5RiskDecisionRecord) -> Result<Mt5RiskDecisionReceipt, String> {
         risk_decision_ledger::append(&self.path, record)
     }
