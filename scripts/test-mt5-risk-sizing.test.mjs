@@ -114,7 +114,8 @@ test('cached MT5 sizing is invalidated when the authenticated account or symbol 
     lastSequence: 41,
   };
 
-  assert.equal(isMt5RiskSizingResultStale(status, result), false);
+  assert.equal(isMt5RiskSizingResultStale(status, result, 'EURUSD'), false);
+  assert.equal(isMt5RiskSizingResultStale(status, result, 'GBPUSD'), true);
 
   for (const [field, value] of [
     ['accountServer', 'Broker-Other'],
@@ -122,7 +123,7 @@ test('cached MT5 sizing is invalidated when the authenticated account or symbol 
     ['symbol', 'GBPUSD'],
   ]) {
     assert.equal(
-      isMt5RiskSizingResultStale({ ...status, [field]: value }, result),
+      isMt5RiskSizingResultStale({ ...status, [field]: value }, result, 'EURUSD'),
       true,
       `${field} changes must invalidate cached sizing even when sequence is unchanged`,
     );
@@ -146,10 +147,10 @@ test('cached MT5 sizing remains fail-closed for stale, disconnected, or missing 
     lastSequence: 41,
   };
 
-  assert.equal(isMt5RiskSizingResultStale(null, result), true);
-  assert.equal(isMt5RiskSizingResultStale(status, null), false);
-  assert.equal(isMt5RiskSizingResultStale({ ...status, connected: false }, result), true);
-  assert.equal(isMt5RiskSizingResultStale({ ...status, stale: true }, result), true);
-  assert.equal(isMt5RiskSizingResultStale({ ...status, quoteStale: true }, result), true);
-  assert.equal(isMt5RiskSizingResultStale({ ...status, lastSequence: 42 }, result), true);
+  assert.equal(isMt5RiskSizingResultStale(null, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale(status, null, 'EURUSD'), false);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, connected: false }, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, stale: true }, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, quoteStale: true }, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, lastSequence: 42 }, result, 'EURUSD'), true);
 });

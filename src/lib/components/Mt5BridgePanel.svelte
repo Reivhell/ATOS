@@ -35,7 +35,7 @@
   let riskSizingError = '';
   let riskSizingResult: Mt5RiskSizingResult | null = null;
   let riskSizingResultStale = false;
-  $: riskSizingResultStale = isMt5RiskSizingResultStale(status, riskSizingResult);
+  $: riskSizingResultStale = isMt5RiskSizingResultStale(status, riskSizingResult, seriesSymbol);
   const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const sessionClock = (seconds: number) => seconds === 86400 ? '24:00' : `${String(Math.floor(seconds / 3600)).padStart(2, '0')}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}`;
 
