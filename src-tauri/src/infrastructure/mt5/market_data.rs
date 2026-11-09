@@ -5,7 +5,9 @@
 //! ACK never advertises data that was not durably written.
 
 use super::risk_decision_ledger;
-pub use super::risk_decision_ledger::{Mt5RiskDecisionLedgerStatus, Mt5RiskDecisionReceipt, Mt5RiskDecisionRecord};
+pub use super::risk_decision_ledger::{
+    Mt5RiskDecisionLedgerStatus, Mt5RiskDecisionReceipt, Mt5RiskDecisionRecord,
+};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -440,15 +442,31 @@ impl Mt5MarketDataStore {
         &self.path
     }
 
-    pub fn initialize_risk_decision_ledger_checkpoint(&self, broker_server: &str, account_login: &str) -> Result<(), String> {
-        risk_decision_ledger::initialize_genesis_checkpoint(&self.path, broker_server, account_login, &super::risk_decision_ledger::KeyringCheckpointStore)
+    pub fn initialize_risk_decision_ledger_checkpoint(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<(), String> {
+        risk_decision_ledger::initialize_genesis_checkpoint(
+            &self.path,
+            broker_server,
+            account_login,
+            &super::risk_decision_ledger::KeyringCheckpointStore,
+        )
     }
 
-    pub fn append_risk_decision(&self, record: &Mt5RiskDecisionRecord) -> Result<Mt5RiskDecisionReceipt, String> {
+    pub fn append_risk_decision(
+        &self,
+        record: &Mt5RiskDecisionRecord,
+    ) -> Result<Mt5RiskDecisionReceipt, String> {
         risk_decision_ledger::append(&self.path, record)
     }
 
-    pub fn risk_decision_ledger_status(&self, broker_server: &str, account_login: &str) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    pub fn risk_decision_ledger_status(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Mt5RiskDecisionLedgerStatus, String> {
         risk_decision_ledger::status(&self.path, broker_server, account_login)
     }
 

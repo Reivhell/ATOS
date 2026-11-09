@@ -19,7 +19,7 @@ const CHECKPOINT_VERSION: u8 = 1;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct LedgerCheckpoint {
+pub(super) struct LedgerCheckpoint {
     version: u8,
     event_count: u64,
     head_sha256: String,
@@ -34,9 +34,18 @@ struct PendingCheckpoint {
     head_sha256: String,
 }
 
-trait CheckpointStore: Send + Sync {
-    fn read(&self, broker_server: &str, account_login: &str) -> Result<Option<LedgerCheckpoint>, String>;
-    fn write(&self, broker_server: &str, account_login: &str, checkpoint: &LedgerCheckpoint) -> Result<(), String>;
+pub(super) trait CheckpointStore: Send + Sync {
+    fn read(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Option<LedgerCheckpoint>, String>;
+    fn write(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+        checkpoint: &LedgerCheckpoint,
+    ) -> Result<(), String>;
 }
 
 #[cfg(not(test))]
@@ -44,7 +53,11 @@ pub(super) struct KeyringCheckpointStore;
 
 #[cfg(not(test))]
 impl CheckpointStore for KeyringCheckpointStore {
-    fn read(&self, broker_server: &str, account_login: &str) -> Result<Option<LedgerCheckpoint>, String> {
+    fn read(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Option<LedgerCheckpoint>, String> {
         let entry = Entry::new(
             CHECKPOINT_SERVICE,
             &checkpoint_credential_name(broker_server, account_login),
@@ -63,11 +76,20 @@ impl CheckpointStore for KeyringCheckpointStore {
         }
     }
 
-    fn write(&self, broker_server: &str, account_login: &str, checkpoint: &LedgerCheckpoint) -> Result<(), String> {
+    fn write(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+        checkpoint: &LedgerCheckpoint,
+    ) -> Result<(), String> {
         let entry = Entry::new(
             CHECKPOINT_SERVICE,
             &checkpoint_credential_name(broker_server, account_login),
-        ).map_err(|_| "MT5 risk-decision checkpoint could not access the operating-system credential store.".to_string())?;
+        )
+        .map_err(|_| {
+            "MT5 risk-decision checkpoint could not access the operating-system credential store."
+                .to_string()
+        })?;
         let value = serde_json::to_string(checkpoint)
             .map_err(|_| "MT5 risk-decision checkpoint could not be serialized.".to_string())?;
         entry.set_password(&value)
@@ -80,12 +102,27 @@ pub(super) struct KeyringCheckpointStore;
 
 #[cfg(test)]
 impl CheckpointStore for KeyringCheckpointStore {
-    fn read(&self, _broker_server: &str, _account_login: &str) -> Result<Option<LedgerCheckpoint>, String> {
-        Err("The operating-system credential store is not used by deterministic ledger tests.".into())
+    fn read(
+        &self,
+        _broker_server: &str,
+        _account_login: &str,
+    ) -> Result<Option<LedgerCheckpoint>, String> {
+        Err(
+            "The operating-system credential store is not used by deterministic ledger tests."
+                .into(),
+        )
     }
 
-    fn write(&self, _broker_server: &str, _account_login: &str, _checkpoint: &LedgerCheckpoint) -> Result<(), String> {
-        Err("The operating-system credential store is not used by deterministic ledger tests.".into())
+    fn write(
+        &self,
+        _broker_server: &str,
+        _account_login: &str,
+        _checkpoint: &LedgerCheckpoint,
+    ) -> Result<(), String> {
+        Err(
+            "The operating-system credential store is not used by deterministic ledger tests."
+                .into(),
+        )
     }
 }
 
@@ -137,7 +174,10 @@ fn verify_external_checkpoint(
     let checkpoint = store.read(&status.broker_server, &status.account_login)?;
     match checkpoint {
         Some(mut checkpoint) if checkpoint.pending.is_some() => {
-            let pending = checkpoint.pending.as_ref().expect("pending checkpoint checked");
+            let pending = checkpoint
+                .pending
+                .as_ref()
+                .expect("pending checkpoint checked");
             if pending.event_count != checkpoint.event_count.saturating_add(1)
                 || !is_sha256(&pending.head_sha256)
             {
@@ -185,7 +225,7 @@ fn verify_external_checkpoint(
     }
 }
 
-pub(crate) fn initialize_genesis_checkpoint(
+pub(super) fn initialize_genesis_checkpoint(
     path: &Path,
     broker_server: &str,
     account_login: &str,
@@ -197,17 +237,26 @@ pub(crate) fn initialize_genesis_checkpoint(
     let connection = open_connection(path)?;
     let status = verify_chain(&connection, broker_server, account_login)?;
     if !status.valid || status.event_count != 0 || status.head_sha256 != GENESIS_SHA256 {
-        return Err("Risk-decision checkpoint can only be provisioned for a verified empty account ledger.".into());
+        return Err(
+            "Risk-decision checkpoint can only be provisioned for a verified empty account ledger."
+                .into(),
+        );
     }
     if store.read(broker_server, account_login)?.is_some() {
-        return Err("Risk-decision checkpoint already exists; refusing to replace its trust root.".into());
+        return Err(
+            "Risk-decision checkpoint already exists; refusing to replace its trust root.".into(),
+        );
     }
-    store.write(broker_server, account_login, &LedgerCheckpoint {
-        version: CHECKPOINT_VERSION,
-        event_count: 0,
-        head_sha256: GENESIS_SHA256.into(),
-        pending: None,
-    })
+    store.write(
+        broker_server,
+        account_login,
+        &LedgerCheckpoint {
+            version: CHECKPOINT_VERSION,
+            event_count: 0,
+            head_sha256: GENESIS_SHA256.into(),
+            pending: None,
+        },
+    )
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -745,13 +794,19 @@ fn append_internal(
         if !anchored.valid {
             return Err(format!(
                 "Risk-decision ledger checkpoint mismatch; refusing to append: {}",
-                anchored.integrity_error.unwrap_or_else(|| "checkpoint verification failed".into())
+                anchored
+                    .integrity_error
+                    .unwrap_or_else(|| "checkpoint verification failed".into())
             ));
         }
-        let mut checkpoint = store.read(&record.broker_server, &record.account_login)?
+        let mut checkpoint = store
+            .read(&record.broker_server, &record.account_login)?
             .ok_or_else(|| "Risk-decision checkpoint is missing; refusing to write.".to_string())?;
         if checkpoint.pending.is_some() {
-            return Err("Risk-decision checkpoint has an unresolved append; manual recovery is required.".into());
+            return Err(
+                "Risk-decision checkpoint has an unresolved append; manual recovery is required."
+                    .into(),
+            );
         }
         checkpoint.pending = Some(PendingCheckpoint {
             event_count: sequence,
@@ -847,12 +902,18 @@ fn append_internal(
 }
 
 #[cfg(not(test))]
-pub(crate) fn append(path: &Path, record: &Mt5RiskDecisionRecord) -> Result<Mt5RiskDecisionReceipt, String> {
+pub(crate) fn append(
+    path: &Path,
+    record: &Mt5RiskDecisionRecord,
+) -> Result<Mt5RiskDecisionReceipt, String> {
     append_internal(path, record, Some(&KeyringCheckpointStore))
 }
 
 #[cfg(test)]
-pub(crate) fn append(path: &Path, record: &Mt5RiskDecisionRecord) -> Result<Mt5RiskDecisionReceipt, String> {
+pub(crate) fn append(
+    path: &Path,
+    record: &Mt5RiskDecisionRecord,
+) -> Result<Mt5RiskDecisionReceipt, String> {
     append_internal(path, record, None)
 }
 
@@ -878,12 +939,25 @@ fn status_internal(
 }
 
 #[cfg(not(test))]
-pub(crate) fn status(path: &Path, broker_server: &str, account_login: &str) -> Result<Mt5RiskDecisionLedgerStatus, String> {
-    status_internal(path, broker_server, account_login, Some(&KeyringCheckpointStore))
+pub(crate) fn status(
+    path: &Path,
+    broker_server: &str,
+    account_login: &str,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+    status_internal(
+        path,
+        broker_server,
+        account_login,
+        Some(&KeyringCheckpointStore),
+    )
 }
 
 #[cfg(test)]
-pub(crate) fn status(path: &Path, broker_server: &str, account_login: &str) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+pub(crate) fn status(
+    path: &Path,
+    broker_server: &str,
+    account_login: &str,
+) -> Result<Mt5RiskDecisionLedgerStatus, String> {
     status_internal(path, broker_server, account_login, None)
 }
 
@@ -896,6 +970,8 @@ mod tests {
     #[derive(Default)]
     struct MemoryCheckpointStore {
         values: std::sync::Mutex<std::collections::HashMap<String, LedgerCheckpoint>>,
+        writes: std::sync::Mutex<usize>,
+        fail_on_write: std::sync::Mutex<Option<usize>>,
     }
 
     impl MemoryCheckpointStore {
@@ -903,24 +979,59 @@ mod tests {
             format!("{broker_server}\\n{account_login}")
         }
 
+        fn fail_on_write(&self, write_number: usize) {
+            *self.writes.lock().unwrap() = 0;
+            *self.fail_on_write.lock().unwrap() = Some(write_number);
+        }
+
         fn corrupt(&self, broker_server: &str, account_login: &str) {
-            if let Some(value) = self.values.lock().unwrap().get_mut(&Self::key(broker_server, account_login)) {
+            if let Some(value) = self
+                .values
+                .lock()
+                .unwrap()
+                .get_mut(&Self::key(broker_server, account_login))
+            {
                 value.head_sha256 = "not-a-checkpoint-hash".into();
             }
         }
 
         fn restore(&self, broker_server: &str, account_login: &str, value: LedgerCheckpoint) {
-            self.values.lock().unwrap().insert(Self::key(broker_server, account_login), value);
+            self.values
+                .lock()
+                .unwrap()
+                .insert(Self::key(broker_server, account_login), value);
         }
     }
 
     impl CheckpointStore for MemoryCheckpointStore {
-        fn read(&self, broker_server: &str, account_login: &str) -> Result<Option<LedgerCheckpoint>, String> {
-            Ok(self.values.lock().unwrap().get(&Self::key(broker_server, account_login)).cloned())
+        fn read(
+            &self,
+            broker_server: &str,
+            account_login: &str,
+        ) -> Result<Option<LedgerCheckpoint>, String> {
+            Ok(self
+                .values
+                .lock()
+                .unwrap()
+                .get(&Self::key(broker_server, account_login))
+                .cloned())
         }
 
-        fn write(&self, broker_server: &str, account_login: &str, checkpoint: &LedgerCheckpoint) -> Result<(), String> {
-            self.values.lock().unwrap().insert(Self::key(broker_server, account_login), checkpoint.clone());
+        fn write(
+            &self,
+            broker_server: &str,
+            account_login: &str,
+            checkpoint: &LedgerCheckpoint,
+        ) -> Result<(), String> {
+            let mut writes = self.writes.lock().unwrap();
+            *writes += 1;
+            if *self.fail_on_write.lock().unwrap() == Some(*writes) {
+                return Err("Injected checkpoint write failure.".into());
+            }
+            self.values
+                .lock()
+                .unwrap()
+                .insert(Self::key(broker_server, account_login), checkpoint.clone());
             Ok(())
         }
     }
@@ -1139,19 +1250,29 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
-
-
     #[test]
-    fn pending_checkpoint_recovers_only_when_the_committed_database_matches() {
+    fn pending_checkpoint_write_failure_does_not_commit_an_event() {
         let path = initialized_path();
         let store = provisioned_store(&path);
-        let receipt = append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
-        store.restore("Broker-Live", "12345", LedgerCheckpoint {
-            version: CHECKPOINT_VERSION,
-            event_count: 0,
-            head_sha256: GENESIS_SHA256.into(),
-            pending: Some(PendingCheckpoint { event_count: 1, head_sha256: receipt.event_sha256 }),
-        });
+        store.fail_on_write(1);
+        assert!(append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err());
+        let status = verify_chain(&open_connection(&path).unwrap(), "Broker-Live", "12345").unwrap();
+        assert!(status.valid);
+        assert_eq!(status.event_count, 0);
+        let checkpoint = store.read("Broker-Live", "12345").unwrap().unwrap();
+        assert_eq!(checkpoint.event_count, 0);
+        assert!(checkpoint.pending.is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn final_checkpoint_write_failure_recovers_from_the_committed_event() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        store.fail_on_write(2);
+        assert!(append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).is_err());
+        let pending = store.read("Broker-Live", "12345").unwrap().unwrap();
+        assert!(pending.pending.is_some());
         let recovered = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
         assert!(recovered.valid);
         assert_eq!(recovered.event_count, 1);
@@ -1160,15 +1281,53 @@ mod tests {
     }
 
     #[test]
+    fn pending_checkpoint_recovers_only_when_the_committed_database_matches() {
+        let path = initialized_path();
+        let store = provisioned_store(&path);
+        let receipt =
+            append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
+        store.restore(
+            "Broker-Live",
+            "12345",
+            LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: 0,
+                head_sha256: GENESIS_SHA256.into(),
+                pending: Some(PendingCheckpoint {
+                    event_count: 1,
+                    head_sha256: receipt.event_sha256,
+                }),
+            },
+        );
+        let recovered = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
+        assert!(recovered.valid);
+        assert_eq!(recovered.event_count, 1);
+        assert!(store
+            .read("Broker-Live", "12345")
+            .unwrap()
+            .unwrap()
+            .pending
+            .is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn pending_checkpoint_does_not_recover_when_database_commit_is_missing() {
         let path = initialized_path();
         let store = provisioned_store(&path);
-        store.restore("Broker-Live", "12345", LedgerCheckpoint {
-            version: CHECKPOINT_VERSION,
-            event_count: 0,
-            head_sha256: GENESIS_SHA256.into(),
-            pending: Some(PendingCheckpoint { event_count: 1, head_sha256: "b".repeat(64) }),
-        });
+        store.restore(
+            "Broker-Live",
+            "12345",
+            LedgerCheckpoint {
+                version: CHECKPOINT_VERSION,
+                event_count: 0,
+                head_sha256: GENESIS_SHA256.into(),
+                pending: Some(PendingCheckpoint {
+                    event_count: 1,
+                    head_sha256: "b".repeat(64),
+                }),
+            },
+        );
         let result = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
         assert!(!result.valid);
         assert!(result.integrity_error.unwrap().contains("interrupted"));
@@ -1184,13 +1343,23 @@ mod tests {
             let worker_path = Arc::clone(&path);
             let worker_store = Arc::clone(&store);
             workers.push(thread::spawn(move || {
-                append_internal(worker_path.as_path(), &sample_record("12345", "BLOCKED", index + 1), Some(worker_store.as_ref())).unwrap().sequence
+                append_internal(
+                    worker_path.as_path(),
+                    &sample_record("12345", "BLOCKED", index + 1),
+                    Some(worker_store.as_ref()),
+                )
+                .unwrap()
+                .sequence
             }));
         }
-        let mut sequences: Vec<u64> = workers.into_iter().map(|worker| worker.join().unwrap()).collect();
+        let mut sequences: Vec<u64> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
         sequences.sort_unstable();
         assert_eq!(sequences, (1..=8).collect::<Vec<_>>());
-        let result = status_internal(path.as_path(), "Broker-Live", "12345", Some(store.as_ref())).unwrap();
+        let result =
+            status_internal(path.as_path(), "Broker-Live", "12345", Some(store.as_ref())).unwrap();
         assert!(result.valid);
         assert_eq!(result.event_count, 8);
         let _ = std::fs::remove_file(path.as_path());
@@ -1201,7 +1370,8 @@ mod tests {
         let path = initialized_path();
         let store = provisioned_store(&path);
         append_internal(&path, &sample_record("12345", "BLOCKED", 1), Some(&store)).unwrap();
-        let receipt = append_internal(&path, &sample_record("12345", "BLOCKED", 2), Some(&store)).unwrap();
+        let receipt =
+            append_internal(&path, &sample_record("12345", "BLOCKED", 2), Some(&store)).unwrap();
         let connection = Connection::open(&path).unwrap();
         connection.execute_batch("DROP TRIGGER trg_mt5_risk_decision_events_no_delete; DELETE FROM mt5_risk_decision_events WHERE sequence=2;").unwrap();
         let result = status_internal(&path, "Broker-Live", "12345", Some(&store)).unwrap();
