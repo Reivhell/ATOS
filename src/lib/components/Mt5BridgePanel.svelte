@@ -3,6 +3,7 @@
   import { Activity, AlertTriangle, CheckCircle2, CircleSlash, Copy, Database, EyeOff, LockKeyhole, Network, RefreshCw, ShieldCheck, Wifi, WifiOff } from 'lucide-svelte';
   import { getMt5BridgeSetup, getMt5BridgeStatus, getMt5InstrumentSpecification, getMt5SessionCalendar, calculateMt5RiskSizing, queryMt5MarketDataSeries } from '../adapters/tauri/bridge';
   import type { Mt5BridgeSetup, Mt5BridgeStatus, Mt5InstrumentSpecificationRecord, Mt5SessionCalendarRecord, Mt5RiskSizingRequest, Mt5RiskSizingResult, Mt5SeriesQuery, Mt5SeriesQueryResponse, Mt5StoredBar } from '../types';
+  import { isMt5RiskSizingResultStale } from '../domain/mt5/risk-sizing-identity.js';
 
   let status: Mt5BridgeStatus | null = null;
   let setup: Mt5BridgeSetup | null = null;
@@ -34,12 +35,7 @@
   let riskSizingError = '';
   let riskSizingResult: Mt5RiskSizingResult | null = null;
   let riskSizingResultStale = false;
-  // Sequence freshness does not bind a cached result to the currently authenticated account or symbol.
-  // Keep identity validation in this presentation guard before exposing an active volume.
-  $: riskSizingResultStale = !!riskSizingResult && (
-    !status?.connected || status.stale || status.quoteStale
-    || status.lastSequence !== riskSizingResult.snapshotSequence
-  );
+  $: riskSizingResultStale = isMt5RiskSizingResultStale(status, riskSizingResult, seriesSymbol);
   const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const sessionClock = (seconds: number) => seconds === 86400 ? '24:00' : `${String(Math.floor(seconds / 3600)).padStart(2, '0')}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}`;
 

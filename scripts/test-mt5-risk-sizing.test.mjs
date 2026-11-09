@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { isMt5RiskSizingResultStale } from '../src/lib/domain/mt5/risk-sizing-identity.js';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -93,4 +94,63 @@ test('final sizing output is bound to the unchanged account frame and completion
   assert.match(engine, /quote_age = completed_at_ms\.saturating_sub\(snapshot\.symbol\.quote_time_ms\)/);
   assert.match(engine, /calculated_at_ms: completed_at_ms/);
   assert.match(engine, /quote_age_is_evaluated_against_the_current_completion_time/);
+});
+
+
+test('cached MT5 sizing is invalidated when the authenticated account or symbol changes', () => {
+  const result = {
+    brokerServer: 'Broker-Live',
+    accountLogin: '123456',
+    symbol: 'EURUSD',
+    snapshotSequence: 41,
+  };
+  const status = {
+    connected: true,
+    stale: false,
+    quoteStale: false,
+    accountServer: 'Broker-Live',
+    accountLogin: '123456',
+    symbol: 'EURUSD',
+    lastSequence: 41,
+  };
+
+  assert.equal(isMt5RiskSizingResultStale(status, result, 'EURUSD'), false);
+  assert.equal(isMt5RiskSizingResultStale(status, result, 'GBPUSD'), true);
+
+  for (const [field, value] of [
+    ['accountServer', 'Broker-Other'],
+    ['accountLogin', '654321'],
+    ['symbol', 'GBPUSD'],
+  ]) {
+    assert.equal(
+      isMt5RiskSizingResultStale({ ...status, [field]: value }, result, 'EURUSD'),
+      true,
+      `${field} changes must invalidate cached sizing even when sequence is unchanged`,
+    );
+  }
+});
+
+test('cached MT5 sizing remains fail-closed for stale, disconnected, or missing sessions', () => {
+  const result = {
+    brokerServer: 'Broker-Live',
+    accountLogin: '123456',
+    symbol: 'EURUSD',
+    snapshotSequence: 41,
+  };
+  const status = {
+    connected: true,
+    stale: false,
+    quoteStale: false,
+    accountServer: 'Broker-Live',
+    accountLogin: '123456',
+    symbol: 'EURUSD',
+    lastSequence: 41,
+  };
+
+  assert.equal(isMt5RiskSizingResultStale(null, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale(status, null, 'EURUSD'), false);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, connected: false }, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, stale: true }, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, quoteStale: true }, result, 'EURUSD'), true);
+  assert.equal(isMt5RiskSizingResultStale({ ...status, lastSequence: 42 }, result, 'EURUSD'), true);
 });
