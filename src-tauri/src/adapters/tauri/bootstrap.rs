@@ -30,6 +30,7 @@ pub fn run() {
             commands::get_mt5_instrument_specification,
             commands::get_mt5_session_calendar,
             commands::calculate_mt5_risk_sizing,
+            commands::get_mt5_risk_decision_ledger_status,
             commands::get_market_data_provider_catalog,
             commands::query_unified_market_data,
             commands::get_candle_series,
