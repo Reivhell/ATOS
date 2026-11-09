@@ -6,8 +6,9 @@
 
 use crate::infrastructure::mt5::market_data::{
     validate_batch, IngestReceipt, Mt5InstrumentSpecification, Mt5InstrumentSpecificationRecord,
-    Mt5MarketDataBatch, Mt5MarketDataStatus, Mt5MarketDataStore, Mt5SeriesQuery,
-    Mt5SeriesQueryResponse, Mt5SessionCalendarRecord, Mt5SessionSchedule,
+    Mt5MarketDataBatch, Mt5MarketDataStatus, Mt5MarketDataStore, Mt5RiskDecisionLedgerStatus,
+    Mt5RiskDecisionReceipt, Mt5RiskDecisionRecord, Mt5SeriesQuery, Mt5SeriesQueryResponse,
+    Mt5SessionCalendarRecord, Mt5SessionSchedule,
 };
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
@@ -475,6 +476,62 @@ impl Mt5Bridge {
                     .unwrap_or_else(|| "MT5 market-data store is unavailable.".into())
             })?
             .status()
+    }
+
+    pub fn initialize_risk_decision_ledger_checkpoint(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<(), String> {
+        let (authenticated_server, authenticated_login) = self.authenticated_account_identity()?;
+        if broker_server != authenticated_server || account_login != authenticated_login {
+            return Err("Risk-decision checkpoint initialization requires the currently authenticated MT5 account.".into());
+        }
+        self.market_data_store
+            .as_ref()
+            .ok_or_else(|| {
+                self.startup_error
+                    .clone()
+                    .unwrap_or_else(|| "MT5 risk-decision ledger is unavailable.".into())
+            })?
+            .initialize_risk_decision_ledger_checkpoint(broker_server, account_login)
+    }
+
+    pub fn append_risk_decision(
+        &self,
+        record: &Mt5RiskDecisionRecord,
+    ) -> Result<Mt5RiskDecisionReceipt, String> {
+        let (broker_server, account_login) = self.authenticated_account_identity()?;
+        if record.broker_server != broker_server || record.account_login != account_login {
+            return Err("Risk-decision audit identity does not match the currently authenticated MT5 account.".into());
+        }
+        self.market_data_store
+            .as_ref()
+            .ok_or_else(|| {
+                self.startup_error
+                    .clone()
+                    .unwrap_or_else(|| "MT5 risk-decision ledger is unavailable.".into())
+            })?
+            .append_risk_decision(record)
+    }
+
+    pub fn risk_decision_ledger_status(
+        &self,
+        broker_server: &str,
+        account_login: &str,
+    ) -> Result<Mt5RiskDecisionLedgerStatus, String> {
+        let (authenticated_server, authenticated_login) = self.authenticated_account_identity()?;
+        if broker_server != authenticated_server || account_login != authenticated_login {
+            return Err("Risk-decision ledger identity does not match the currently authenticated MT5 account.".into());
+        }
+        self.market_data_store
+            .as_ref()
+            .ok_or_else(|| {
+                self.startup_error
+                    .clone()
+                    .unwrap_or_else(|| "MT5 risk-decision ledger is unavailable.".into())
+            })?
+            .risk_decision_ledger_status(broker_server, account_login)
     }
 
     pub fn market_data_series_query(

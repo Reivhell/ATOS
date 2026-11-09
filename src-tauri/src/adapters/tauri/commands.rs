@@ -81,6 +81,24 @@ pub fn calculate_mt5_risk_sizing(
 }
 
 #[tauri::command]
+pub fn initialize_mt5_risk_decision_ledger_checkpoint(
+    bridge: State<'_, mt5_bridge::Mt5Bridge>,
+    broker_server: String,
+    account_login: String,
+) -> Result<(), String> {
+    bridge.initialize_risk_decision_ledger_checkpoint(&broker_server, &account_login)
+}
+
+#[tauri::command]
+pub fn get_mt5_risk_decision_ledger_status(
+    bridge: State<'_, mt5_bridge::Mt5Bridge>,
+    broker_server: String,
+    account_login: String,
+) -> Result<mt5_market_data::Mt5RiskDecisionLedgerStatus, String> {
+    bridge.risk_decision_ledger_status(&broker_server, &account_login)
+}
+
+#[tauri::command]
 pub fn get_mt5_session_calendar(
     bridge: State<'_, mt5_bridge::Mt5Bridge>,
     broker_server: String,
