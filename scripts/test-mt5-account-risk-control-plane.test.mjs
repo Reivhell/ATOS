@@ -9,8 +9,8 @@ const [bridge, risk, ea, types, panel, securityDocs, designDocs, statusDocs] = a
   read('MQL5/Experts/ATOS_Bridge.mq5'),
   read('src/lib/types.ts'),
   read('src/lib/components/Mt5BridgePanel.svelte'),
-  read('docs/MT5_BRIDGE_SECURITY_AND_OPERATIONS.md'),
-  read('docs/MT5_BROKER_NATIVE_RISK_SIZING_ENGINE_2026-10-31.md'),
+  read('docs/archive/historical-0.11-era/MT5_BRIDGE_SECURITY_AND_OPERATIONS.md'),
+  read('docs/archive/historical-0.11-era/MT5_BROKER_NATIVE_RISK_SIZING_ENGINE_2026-10-31.md'),
   read('docs/IMPLEMENTATION_STATUS.md'),
 ]);
 

@@ -128,7 +128,7 @@ test('LLM output is not a score input and the evidence envelope is verified befo
   assert.match(rust, /stale_or_changed_snapshot_is_rejected/);
   assert.ok(rust.indexOf('call_provider_for_research(&provider_id') < rust.indexOf('same_fresh_market_snapshot(&market_context, &confirmed_context)'));
   assert.ok(rust.indexOf('same_fresh_market_snapshot(&market_context, &confirmed_context)') < rust.indexOf('let report = AgentResearchReport'));
-  assert.match(rust, /AgenticTradingOS\/0\.11\.0/);
+  assert.match(rust, /AgenticTradingOS\/0\.0\.1-beta/);
   assert.match(orchestrator, /aiNarrativeExcludedFromScoring: true/);
   assert.match(orchestrator, /verifyCommentaryDigest/);
   assert.match(orchestrator, /commentary digest mismatch/);

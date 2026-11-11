@@ -1,12 +1,27 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 dist/
 .svelte-kit/
+src-tauri/target/
+coverage/
+release-evidence/
+evidence/
+
+# Environment
 .env
 .env.*
 !.env.example
-src-tauri/target/
-evidence/
-.DS_Store
+
+# Logs
 *.log
-coverage/
-release-evidence/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

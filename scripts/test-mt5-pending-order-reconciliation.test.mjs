@@ -9,7 +9,7 @@ const [bridge, risk, ea, types, panel, docs] = await Promise.all([
   read('MQL5/Experts/ATOS_Bridge.mq5'),
   read('src/lib/types.ts'),
   read('src/lib/components/Mt5BridgePanel.svelte'),
-  read('docs/MT5_PENDING_ORDER_EXPOSURE_RECONCILIATION_2026-10-31.md'),
+  read('docs/archive/historical-0.11-era/MT5_PENDING_ORDER_EXPOSURE_RECONCILIATION_2026-10-31.md'),
 ]);
 
 test('protocol v6 requires complete bounded pending-order inventory', () => {

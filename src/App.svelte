@@ -690,7 +690,7 @@
         <button onclick={() => { void navigate('AI Agents'); }}><Play size={14} /> Manage agents</button>
         <button onclick={() => { void navigate('Tools & MCP'); }}><Terminal size={14} /> Open tools</button>
       </div>
-      <div class="system-state"><span class="pulse-dot"></span><div><strong>Local engine</strong><small>Rust runtime connected</small></div><span class="system-version">v0.11.0</span></div>
+      <div class="system-state"><span class="pulse-dot"></span><div><strong>Local engine</strong><small>Rust runtime connected</small></div><span class="system-version">v0.0.1 Beta</span></div>
     </div>
   </aside>
 

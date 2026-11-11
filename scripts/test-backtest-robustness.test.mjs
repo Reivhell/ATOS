@@ -39,8 +39,8 @@ test('native regression coverage addresses cost stress, short history and future
   assert.match(rust, /fn out_of_sample_validation_fails_closed_when_history_is_too_short\(\)/);
 });
 
-test('application manifests remain version-aligned at 0.11.0', () => {
-  assert.equal(packageJson.version, '0.11.0');
-  assert.equal(tauri.version, '0.11.0');
-  assert.match(cargo, /^version = "0\.11\.0"/m);
+test('application manifests remain version-aligned at 0.0.1-beta', () => {
+  assert.equal(packageJson.version, '0.0.1-beta');
+  assert.equal(tauri.version, '0.0.1-beta');
+  assert.match(cargo, /^version = "0\.0\.1-beta"/m);
 });

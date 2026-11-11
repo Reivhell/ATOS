@@ -281,7 +281,7 @@ fn provider_client() -> Result<Client, String> {
         .connect_timeout(Duration::from_secs(4))
         .timeout(Duration::from_secs(9))
         .user_agent(
-            "AgenticTradingOS/0.11.0 (meme-coin-hunter; read-only; no-transaction-authority)",
+            "AgenticTradingOS/0.0.1-beta (meme-coin-hunter; read-only; no-transaction-authority)",
         )
         .build()
         .map_err(|_| "Unable to initialize the bounded market-data client.".into())

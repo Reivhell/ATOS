@@ -21,7 +21,7 @@ test('native regression tests cover missing intervals, irregular cadence, and ti
 
 test('backtest cadence policy documents the continuous-market limitation', () => {
   assert.match(source, /session-aware instruments need a/);
-  assert.match(cargo, /version = "0\.11\.0"/);
+  assert.match(cargo, /version = "0\.0\.1-beta"/);
 });
 
 

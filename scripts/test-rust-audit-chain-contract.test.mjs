@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 const strictRust = readFileSync(new URL('../src-tauri/src/application/strict_analysis.rs', import.meta.url), 'utf8');
 const tauriLib = readFileSync(new URL('../src-tauri/src/adapters/tauri/commands.rs', import.meta.url), 'utf8');
@@ -35,7 +35,10 @@ test('audit-chain integrity is exposed through the native boundary, not browser 
 
 test('durable specialist receipts are required, hash-bound, append-only and never browser-self-attested', () => {
   const policy = JSON.parse(readFileSync(new URL('../docs/STRICT_DECISION_LAYER_POLICY.json', import.meta.url), 'utf8'));
-  const receiptDoc = readFileSync(new URL('../docs/STRICT_SPECIALIST_DISPATCH_RECEIPTS_0.4.2.md', import.meta.url), 'utf8');
+  const receiptDocPath = existsSync(new URL('../docs/STRICT_SPECIALIST_DISPATCH_RECEIPTS_0.4.2.md', import.meta.url))
+    ? '../docs/STRICT_SPECIALIST_DISPATCH_RECEIPTS_0.4.2.md'
+    : '../docs/archive/historical-0.11-era/STRICT_SPECIALIST_DISPATCH_RECEIPTS_0.4.2.md';
+  const receiptDoc = readFileSync(new URL(receiptDocPath, import.meta.url), 'utf8');
   for (const token of [
     'strict_specialist_dispatch_receipts', 'specialist_receipt_recorded',
     'schema_migrated_v2_to_v3', 'pub(crate) fn persist_specialist_dispatch_receipt',

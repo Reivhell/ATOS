@@ -459,7 +459,7 @@ fn provider_client() -> Result<Client, String> {
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(35))
         .redirect(Policy::none())
-        .user_agent("AgenticTradingOS/0.11.0 (read-only-research-agent; no-order-authority)")
+        .user_agent("AgenticTradingOS/0.0.1-beta (read-only-research-agent; no-order-authority)")
         .build()
         .map_err(|_| "Unable to initialize the bounded provider client.".into())
 }

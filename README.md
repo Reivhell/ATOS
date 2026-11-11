@@ -12,7 +12,7 @@ A local-first trading research desktop built with **Rust · Tauri 2 · Svelte 5*
 [Get started](#get-started) · [Explore capabilities](#what-atos-can-do) · [Architecture](#architecture) · [Documentation](#documentation)
 
 [![CI](https://github.com/Reivhell/ATOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Reivhell/ATOS/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.11.0-2876e8?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.0.1--beta-2876e8?style=flat-square)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/backend-Rust-CE6B38?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/desktop-Tauri_2-24C8D8?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Svelte](https://img.shields.io/badge/UI-Svelte_5-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://svelte.dev/)
@@ -20,7 +20,7 @@ A local-first trading research desktop built with **Rust · Tauri 2 · Svelte 5*
 </div>
 
 > [!CAUTION]
-> **ATOS v0.11.0 is an engineering/source milestone, not a production-certified trading system.** The MT5 Expert Advisor is read-only. It does not submit, amend, close, or cancel broker orders. Research results, risk calculations, and margin preflight must not be treated as a guarantee of trading outcomes or broker acceptance.
+> **ATOS v0.0.1 Beta is an engineering/source milestone, not a production-certified trading system.** The MT5 Expert Advisor is read-only. It does not submit, amend, close, or cancel broker orders. Research results, risk calculations, and margin preflight must not be treated as a guarantee of trading outcomes or broker acceptance.
 
 ## Start here
 

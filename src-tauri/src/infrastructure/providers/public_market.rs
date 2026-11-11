@@ -129,7 +129,7 @@ pub async fn refresh_public_screener(core: &TradingCore) -> Result<DashboardSnap
         .redirect(Policy::none())
         .timeout(Duration::from_secs(9))
         .connect_timeout(Duration::from_secs(4))
-        .user_agent("AgenticTradingOS/0.11.0 (public-screener; read-only; no-order-permissions)")
+        .user_agent("AgenticTradingOS/0.0.1-beta (public-screener; read-only; no-order-permissions)")
         .build()
     {
         Ok(client) => client,
@@ -563,7 +563,7 @@ pub async fn refresh_public_market_data(core: &TradingCore) -> Result<DashboardS
         .redirect(Policy::none())
         .timeout(Duration::from_secs(8))
         .connect_timeout(Duration::from_secs(4))
-        .user_agent("AgenticTradingOS/0.11.0 (public-market-data; no-order-permissions)")
+        .user_agent("AgenticTradingOS/0.0.1-beta (public-market-data; no-order-permissions)")
         .build()
     {
         Ok(client) => client,

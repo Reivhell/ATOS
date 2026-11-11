@@ -11,7 +11,7 @@ const [native, ea, ui, types, adapter, app, docs, cargo, mt5Modules, bootstrap] 
   read('src/lib/types.ts'),
   read('src/lib/adapters/tauri/bridge.ts'),
   read('src/App.svelte'),
-  read('docs/MT5_BRIDGE_SECURITY_AND_OPERATIONS.md'),
+  read('docs/archive/historical-0.11-era/MT5_BRIDGE_SECURITY_AND_OPERATIONS.md'),
   read('src-tauri/Cargo.toml'),
   read('src-tauri/src/infrastructure/mt5/mod.rs'),
   read('src-tauri/src/adapters/tauri/bootstrap.rs'),
